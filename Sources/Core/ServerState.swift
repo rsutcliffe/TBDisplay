@@ -54,6 +54,7 @@ final class FailureTracker {
         return address.rawValue.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// True while this machine is locked out. An expired lockout is cleared the first time it is asked about.
     func isBlocked(_ host: String) -> Bool {
         let host = Self.key(for: host)
         guard let until = blockedUntil[host] else { return false }
@@ -73,5 +74,6 @@ final class FailureTracker {
         return true
     }
 
+    /// A good connection forgets the earlier failures, so a few slips are not held against a paired Mac for ever.
     func recordSuccess(_ host: String) { counts[Self.key(for: host)] = nil }
 }

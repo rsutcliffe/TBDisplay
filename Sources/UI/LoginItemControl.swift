@@ -11,7 +11,9 @@ enum LoginItemControl {
         case .enabled: return .on
         case .notRegistered: return .off
         case .requiresApproval: return .needsApproval
-        default: return .unavailable
+        default:
+            log("Open at login unavailable: system status \(SMAppService.mainApp.status.rawValue) (3 = not found) for \(Bundle.main.bundlePath).")
+            return .unavailable
         }
     }
 

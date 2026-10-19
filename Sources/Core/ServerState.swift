@@ -1,6 +1,7 @@
 // State shared between the stream session, the listener and the menu bar item.
 
 import Foundation
+import Network
 
 struct StreamStats {
     var connected = false
@@ -43,11 +44,14 @@ final class FailureTracker {
         self.now = now
     }
 
-    /// A whole IPv6 /64 belongs to one machine, so it counts as one address.
+    /// A whole IPv6 /64 belongs to one machine, so it counts as one address. The address is parsed first, so
+    /// compressed forms, letter case and an interface suffix such as "%en0" all give the same key.
+    /// Refactored: TD-004 - this used to cut the text at the fourth colon, which "fe80::1" and "fe80:0:0:0::1" both evaded.
     static func key(for host: String) -> String {
         guard host.contains(":") else { return host }
-        let groups = host.split(separator: ":", omittingEmptySubsequences: false)
-        return groups.prefix(4).joined(separator: ":")
+        let bare = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).split(separator: "%", maxSplits: 1).first.map(String.init) ?? host
+        guard let address = IPv6Address(bare) else { return host }      // not an address: counted under its own spelling
+        return address.rawValue.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     func isBlocked(_ host: String) -> Bool {

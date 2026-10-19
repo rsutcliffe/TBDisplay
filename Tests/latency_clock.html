@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>TBDisplay clock</title>
+<body style="margin:0;background:#000;color:#0f0;font:bold 22vw/1 ui-monospace,monospace;display:flex;align-items:center;justify-content:center;height:100vh">
+<div id="t"></div>
+<script>
+// Shows the MacBook's clock to the millisecond. Two windows read the same clock, so the gap between them is the delay.
+const el = document.getElementById('t');
+(function tick() {
+  const n = Date.now() % 100000;
+  el.textContent = String(Math.floor(n / 1000)).padStart(2, '0') + '.' + String(n % 1000).padStart(3, '0');
+  requestAnimationFrame(tick);
+})();
+</script>

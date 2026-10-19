@@ -1,0 +1,98 @@
+// The iMac client's setup window: what is happening, and the few things a person might need to press.
+// Shown whenever the client is not streaming. The wording comes from ClientModel.
+
+import AppKit
+
+final class SetupWindow: NSObject, NSWindowDelegate {
+    let window: NSWindow
+    private let status = NSTextField(wrappingLabelWithString: "")
+    private let keyLine = NSTextField(labelWithString: "")
+    let pairButton = NSButton(title: "Pair with MacBook…", target: nil, action: nil)
+    let checkButton = NSButton(title: "Check connection…", target: nil, action: nil)
+    let quitButton = NSButton(title: "Quit", target: nil, action: nil)
+    let logButton = NSButton(title: "Show log", target: nil, action: nil)
+    let loginBox = NSButton(checkboxWithTitle: "Open at login", target: nil, action: nil)
+    var onQuit: (() -> Void)?
+    var onCheck: (() -> Void)?
+    var onPairingAnswer: ((Bool) -> Void)?
+    private let yesButton = NSButton(title: "Yes, it matches", target: nil, action: nil)
+    private let noButton = NSButton(title: "No, they differ", target: nil, action: nil)
+    private let codeLabel = NSTextField(labelWithString: "")
+    private var lastModel = ClientModel()
+    var pairing: PairingFlowModel? { didSet { update(lastModel) } }
+
+    override init() {
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 300),
+                          styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        super.init()
+        window.title = "TBDisplay"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+
+        let title = NSTextField(labelWithString: "TBDisplay")
+        title.font = .systemFont(ofSize: 22, weight: .semibold)
+        status.font = .systemFont(ofSize: 15)
+        status.preferredMaxLayoutWidth = 410
+        keyLine.textColor = .secondaryLabelColor
+        let version = NSTextField(labelWithString: "Version \(appVersion)")
+        version.textColor = .secondaryLabelColor
+        for button in [pairButton, checkButton, quitButton, logButton, yesButton, noButton] { button.bezelStyle = .rounded }
+        logButton.target = self; logButton.action = #selector(showLog)
+        loginBox.target = self; loginBox.action = #selector(toggleLogin)
+        yesButton.target = self; yesButton.action = #selector(answerYes)
+        noButton.target = self; noButton.action = #selector(answerNo)
+        yesButton.isHidden = true; noButton.isHidden = true
+        quitButton.target = self
+        quitButton.action = #selector(quit)
+        quitButton.keyEquivalent = "\r"
+        codeLabel.font = .monospacedDigitSystemFont(ofSize: 44, weight: .semibold)
+        codeLabel.isHidden = true
+        checkButton.target = self
+        checkButton.action = #selector(check)
+
+        let buttons = NSStackView(views: [pairButton, checkButton, logButton, quitButton])
+        buttons.orientation = .horizontal
+        buttons.spacing = 10
+        let answers = NSStackView(views: [yesButton, noButton])
+        answers.orientation = .horizontal
+        answers.spacing = 10
+        let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, loginBox, buttons])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+        stack.setCustomSpacing(24, after: version)
+        window.contentView = stack
+        window.setContentSize(stack.fittingSize.width < 460 ? NSSize(width: 460, height: max(stack.fittingSize.height, 240)) : stack.fittingSize)
+        window.center()
+    }
+
+    func update(_ model: ClientModel) {
+        lastModel = model
+        // While pairing, its wording and code take over from the connection status.
+        status.stringValue = pairing?.statusText ?? model.statusMessage
+        codeLabel.stringValue = pairing?.displayCode ?? ""
+        codeLabel.isHidden = pairing?.displayCode == nil
+        pairButton.isEnabled = pairing == nil || pairing?.isFinished == true
+        let asking = pairing?.asksForConfirmation == true
+        yesButton.isHidden = !asking
+        noButton.isHidden = !asking
+        keyLine.stringValue = PairingKey.load() == nil ? "Pairing key: not on this Mac" : "Pairing key: found"
+        refreshLoginBox()
+    }
+
+    private func refreshLoginBox() {
+        let login = LoginItemControl.state
+        loginBox.title = login.title
+        loginBox.state = login.isChecked ? .on : .off
+        loginBox.isEnabled = login.isEnabled
+    }
+
+    @objc private func toggleLogin() { LoginItemControl.click(); refreshLoginBox() }
+    @objc private func showLog() { LoginItemControl.revealLog(name: "client") }
+    @objc private func answerYes() { onPairingAnswer?(true) }
+    @objc private func answerNo() { onPairingAnswer?(false) }
+    @objc private func quit() { onQuit?() }
+    @objc private func check() { onCheck?() }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { onQuit?(); return false }
+}

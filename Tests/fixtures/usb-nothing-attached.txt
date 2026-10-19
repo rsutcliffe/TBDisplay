@@ -1,0 +1,13 @@
+USB:
+
+    USB 3.1 Bus:
+
+      Location ID: 0x03000000
+      Connection Type: Built-in
+      Driver: AppleT8142USBXHCI
+
+    USB 3.1 Bus:
+
+      Location ID: 0x00000000
+      Connection Type: Built-in
+      Driver: AppleT8142USBXHCI

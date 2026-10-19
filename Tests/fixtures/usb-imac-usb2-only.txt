@@ -1,0 +1,30 @@
+USB:
+
+    USB 3.1 Bus:
+
+      Location ID: 0x03000000
+      Connection Type: Built-in
+      Driver: AppleT8142USBXHCI
+
+    USB 3.1 Bus:
+
+      Location ID: 0x00000000
+      Connection Type: Built-in
+      Driver: AppleT8142USBXHCI
+
+        iMac:
+
+          Location ID: 0x00100000
+          Connection Type: Removable
+          Manufacturer: Apple Inc.
+          Serial Number: REDACTED
+          Link Speed: 480 Mb/s
+          USB Vendor ID: 0x05ac
+          USB Product ID: 0x1904
+          USB Product Version: 0x2101
+
+    USB 3.1 Bus:
+
+      Location ID: 0x01000000
+      Connection Type: Built-in
+      Driver: AppleT8142USBXHCI

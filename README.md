@@ -52,7 +52,7 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 - Saved position of the virtual display: `~/Library/Application Support/tbdisplay/layout.json`.
 - Logs: `~/Library/Logs/TBDisplay/server.log` and `client.log`, owner-only, up to 1 MB each with one older copy. "Show log" in the server menu and in the client window opens the folder.
 - Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
-- "Open at login" is a checkbox in each app. It only works for an installed app (in Applications), and macOS may ask you to allow it in System Settings.
+- "Open at login" is a checkbox in each app. It only works when the app runs from the Applications folder, not from Downloads or straight from the disk image, so move it there and reopen it. macOS may then ask you to allow it in System Settings.
 
 ## Updates
 

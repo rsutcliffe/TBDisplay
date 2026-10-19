@@ -19,6 +19,7 @@ trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Prefe
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 ax() { osascript -e "tell application \"System Events\" to tell process \"tbdisplay-client\" to $1" 2>&1; }
+. "$(dirname "$0")/ui_edges.sh"
 
 if pgrep -f "tbdisplay-client" >/dev/null; then echo "tbdisplay-client is already running. Stop it first."; exit 2; fi
 
@@ -34,7 +35,17 @@ buttons=$(ax 'get name of every button of window "TBDisplay"')
 for b in "Pair with MacBook…" "Check connection…" "Check for updates…" "Show log" "Quit"; do
     echo "$buttons" | grep -q "$b" && pass "button: $b" || fail "missing button: $b (got: $buttons)"
 done
+# Every button must sit inside the window with a margin, not touch or pass its right edge
+read -r wx wy < <(ax 'get position of window "TBDisplay"' | tr -d ',' | tr -s ' ')
+read -r ww wh < <(ax 'get size of window "TBDisplay"' | tr -d ',' | tr -s ' ')
+for b in "Pair with MacBook…" "Check connection…" "Check for updates…" "Show log" "Quit"; do
+    read -r bx by < <(ax "get position of button \"$b\" of window \"TBDisplay\"" | tr -d ',' | tr -s ' ')
+    read -r bw bh < <(ax "get size of button \"$b\" of window \"TBDisplay\"" | tr -d ',' | tr -s ' ')
+    margin=$(( (wx + ww) - (bx + bw) ))
+    [ "$margin" -ge 16 ] && [ "$bx" -ge $((wx + 16)) ] && pass "button \"$b\" sits inside the window (right margin ${margin} pt)" || fail "button \"$b\" touches or passes the window edge (right margin ${margin} pt, window ${wx}..$((wx + ww)))"
+done
 boxes=$(ax 'get name of every checkbox of window "TBDisplay"')
+check_inside tbdisplay-client "TBDisplay"
 echo "$boxes" | grep -q "Open at login" && pass "the Open at login checkbox is shown" || fail "no Open at login checkbox (got: $boxes)"
 echo "$boxes" | grep -q "Check for updates automatically" && pass "the automatic update checkbox is shown" || fail "no automatic update checkbox (got: $boxes)"
 ax 'click button "Quit" of window "TBDisplay"' >/dev/null

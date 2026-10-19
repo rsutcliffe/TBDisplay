@@ -16,7 +16,7 @@ extension LoginItemState {
         switch self {
         case .on, .off: return "Open at login"
         case .needsApproval: return "Open at login (allow it in System Settings)"
-        case .unavailable: return "Open at login (the app must be installed first)"
+        case .unavailable: return "Open at login (move TBDisplay to Applications, then reopen it)"
         }
     }
     var isChecked: Bool { self == .on }

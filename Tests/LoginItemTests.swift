@@ -14,5 +14,5 @@ func runLoginItemTests() {
     check(LoginItemState.needsApproval.isEnabled && LoginItemState.needsApproval.tapAction == .openSettings, "needs approval: a click opens System Settings")
     check(!LoginItemState.needsApproval.isChecked, "needs approval: not shown as on until it is allowed")
     check(!LoginItemState.unavailable.isEnabled && LoginItemState.unavailable.tapAction == .nothing, "unavailable: nothing to click")
-    check(LoginItemState.unavailable.title.contains("installed"), "unavailable: the text says the app must be installed")
+    check(LoginItemState.unavailable.title.contains("Applications") && LoginItemState.unavailable.title.contains("reopen"), "unavailable: the text says to move the app to Applications and reopen it")
 }

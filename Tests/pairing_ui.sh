@@ -23,6 +23,7 @@ trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Prefe
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 ax() { osascript -e "tell application \"System Events\" to tell process \"$1\" to $2" 2>&1; }
+. "$(dirname "$0")/ui_edges.sh"
 wait_text() {   # process window pattern seconds
     for _ in $(seq 1 $(( $4 * 2 ))); do
         t=$(ax "$1" "get value of every static text of window \"$2\"")
@@ -41,6 +42,7 @@ sleep 4
 # The MacBook opens its pairing panel from the menu bar item
 ax tbdisplay-server 'click menu item "Pair a new Mac…" of menu 1 of menu bar item 1 of menu bar 1' >/dev/null
 wait_text tbdisplay-server "Pair a new Mac" "Pair with MacBook" 6 && pass "the MacBook panel tells you what to press on the iMac" || fail "no MacBook pairing panel"
+check_inside tbdisplay-server "Pair a new Mac"
 # Choosing it again while it is open must not leave a second listener behind or break the first
 ax tbdisplay-server 'click menu item "Pair a new Mac…" of menu 1 of menu bar item 1 of menu bar 1' >/dev/null
 sleep 1

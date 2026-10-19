@@ -35,7 +35,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let title = NSTextField(labelWithString: "TBDisplay")
         title.font = .systemFont(ofSize: 22, weight: .semibold)
         status.font = .systemFont(ofSize: 15)
-        status.preferredMaxLayoutWidth = 410
         keyLine.textColor = .secondaryLabelColor
         let version = NSTextField(labelWithString: "Version \(appVersion)")
         version.textColor = .secondaryLabelColor
@@ -70,8 +69,24 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         stack.spacing = 12
         stack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
         stack.setCustomSpacing(24, after: version)
-        window.contentView = stack
-        window.setContentSize(stack.fittingSize.width < 460 ? NSSize(width: 460, height: max(stack.fittingSize.height, 240)) : stack.fittingSize)
+        // The window is sized from a real layout pass, so the widest row (the buttons) always has its margin on the right,
+        // and the status text wraps at the window's width instead of a fixed one.
+        let container = NSView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: 520),
+            status.widthAnchor.constraint(equalTo: container.widthAnchor, constant: -48),
+        ])
+        window.contentView = container
+        container.layoutSubtreeIfNeeded()
+        // The engine's own width left out the right-hand margin of the button row, so the width is worked out here: the widest row plus both margins.
+        let width = max(520, buttons.fittingSize.width + stack.edgeInsets.left + stack.edgeInsets.right)
+        window.setContentSize(NSSize(width: width, height: max(container.fittingSize.height, 240)))
         window.center()
     }
 

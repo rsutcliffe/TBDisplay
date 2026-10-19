@@ -20,6 +20,7 @@ trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Prefe
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 ax() { osascript -e "tell application \"System Events\" to tell process \"$1\" to $2" 2>&1; }
+. "$(dirname "$0")/ui_edges.sh"
 window_text() { ax "$1" 'get value of text area 1 of scroll area 1 of window "Connection check"'; }
 wait_report() {   # process seconds
     for _ in $(seq 1 $(( $2 * 2 ))); do
@@ -41,6 +42,7 @@ wait_report tbdisplay-server 40 && pass "the MacBook shows a connection report" 
 t=$(window_text tbdisplay-server)
 echo "$t" | grep -qE "TBDisplay [0-9]+\.[0-9]+\.[0-9]+ \(protocol [0-9]+\)" && pass "the report names the versions" || fail "no versions in the report"
 echo "$t" | grep -qE "^(Problem found|Everything looks right|Nothing wrong found|Nothing to report)" && pass "the report starts with a verdict" || fail "no verdict line"
+check_inside tbdisplay-server "Connection check"
 buttons=$(ax tbdisplay-server 'get name of every button of window "Connection check"')
 for b in "Copy" "Check again" "Close"; do echo "$buttons" | grep -q "$b" && pass "the MacBook window has: $b" || fail "the MacBook window lacks: $b"; done
 

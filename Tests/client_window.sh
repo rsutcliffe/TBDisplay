@@ -14,6 +14,7 @@ fails=0
 PREFS_SUITE="tbdisplay.test.$$"
 export TBDISPLAY_PREFS_SUITE="$PREFS_SUITE"
 defaults write "$PREFS_SUITE" tbdisplay.firstRunDone -bool true
+defaults write "$PREFS_SUITE" tbdisplay.updateCheckDisabled -bool true      # the tests never contact GitHub
 trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Preferences/$PREFS_SUITE.plist"' EXIT
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }
@@ -30,11 +31,12 @@ texts=$(ax 'get value of every static text of window "TBDisplay"')
 echo "$texts" | grep -q "No pairing key" && pass "the window says there is no pairing key" || fail "no 'No pairing key' text (got: ${texts:0:100})"
 echo "$texts" | grep -qE "Version [0-9]+\.[0-9]+" && pass "the window shows the app version" || fail "no version shown"
 buttons=$(ax 'get name of every button of window "TBDisplay"')
-for b in "Pair with MacBook…" "Check connection…" "Show log" "Quit"; do
+for b in "Pair with MacBook…" "Check connection…" "Check for updates…" "Show log" "Quit"; do
     echo "$buttons" | grep -q "$b" && pass "button: $b" || fail "missing button: $b (got: $buttons)"
 done
 boxes=$(ax 'get name of every checkbox of window "TBDisplay"')
 echo "$boxes" | grep -q "Open at login" && pass "the Open at login checkbox is shown" || fail "no Open at login checkbox (got: $boxes)"
+echo "$boxes" | grep -q "Check for updates automatically" && pass "the automatic update checkbox is shown" || fail "no automatic update checkbox (got: $boxes)"
 ax 'click button "Quit" of window "TBDisplay"' >/dev/null
 sleep 2
 kill -0 $PID 2>/dev/null && fail "the Quit button did not quit" || pass "the Quit button quits the client"

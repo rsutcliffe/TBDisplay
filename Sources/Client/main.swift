@@ -573,6 +573,7 @@ window.makeFirstResponder(videoView)
 // Outside --windowed there are two things to show: the setup window while nothing is streaming, and the
 // full-screen picture once it is. The model decides which.
 let setupWindow: SetupWindow? = options.windowed ? nil : SetupWindow()
+UpdateController.shared.checkAtLaunchIfDue()
 setupWindow?.onQuit = videoView.onQuit
 var cursorHidden = false
 func present(_ model: ClientModel) {

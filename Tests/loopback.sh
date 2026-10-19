@@ -20,6 +20,7 @@ fails=0
 PREFS_SUITE="tbdisplay.test.$$"
 export TBDISPLAY_PREFS_SUITE="$PREFS_SUITE"
 defaults write "$PREFS_SUITE" tbdisplay.firstRunDone -bool true
+defaults write "$PREFS_SUITE" tbdisplay.updateCheckDisabled -bool true      # the tests never contact GitHub
 trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Preferences/$PREFS_SUITE.plist"' EXIT
 
 pass() { echo "ok   $1"; }

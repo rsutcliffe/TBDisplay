@@ -418,6 +418,8 @@ enum Prefs {
     }
     static let firstRunDone = "tbdisplay.firstRunDone"
     static let everConnected = "tbdisplay.everConnected"     // an iMac has connected to this MacBook
+    static let updateCheckDisabled = "tbdisplay.updateCheckDisabled"   // the person turned automatic update checks off
+    static let lastUpdateCheck = "tbdisplay.lastUpdateCheck"           // when the last successful check finished
 }
 
 // MARK: - Logging and arguments

@@ -75,6 +75,11 @@ final class StatusController: NSObject, NSMenuDelegate {
         let login = LoginItemControl.state
         action(login.title, #selector(toggleLogin), enabled: login.isEnabled, checked: login.isChecked)
         action("Show log in Finder", #selector(showLog))
+        if let update = UpdateController.shared.available {
+            action("Update available: TBDisplay \(update.version)…", #selector(openUpdate))
+        }
+        action("Check for updates…", #selector(checkForUpdates))
+        action("Check for updates automatically", #selector(toggleAutomaticUpdates), checked: UpdateController.shared.automaticChecks)
         action("Reveal pairing key in Finder", #selector(revealKey))
         action("Create new pairing key…", #selector(newKey))
         menu.addItem(.separator())
@@ -95,6 +100,12 @@ final class StatusController: NSObject, NSMenuDelegate {
     }
 
     @objc private func disconnect() { server.disconnect() }
+
+    @objc private func checkForUpdates() { UpdateController.shared.checkNow() }
+
+    @objc private func openUpdate() { UpdateController.shared.openDownloadPage() }
+
+    @objc private func toggleAutomaticUpdates() { UpdateController.shared.automaticChecks.toggle() }
 
     @objc private func toggleLogin() { LoginItemControl.click() }
 

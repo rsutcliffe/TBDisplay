@@ -11,6 +11,9 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     let checkButton = NSButton(title: "Check connection…", target: nil, action: nil)
     let quitButton = NSButton(title: "Quit", target: nil, action: nil)
     let logButton = NSButton(title: "Show log", target: nil, action: nil)
+    let updateButton = NSButton(title: "Check for updates…", target: nil, action: nil)
+    let autoUpdateBox = NSButton(checkboxWithTitle: "Check for updates automatically", target: nil, action: nil)
+    private let updateLabel = NSTextField(labelWithString: "")
     let loginBox = NSButton(checkboxWithTitle: "Open at login", target: nil, action: nil)
     var onQuit: (() -> Void)?
     var onCheck: (() -> Void)?
@@ -36,7 +39,12 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         keyLine.textColor = .secondaryLabelColor
         let version = NSTextField(labelWithString: "Version \(appVersion)")
         version.textColor = .secondaryLabelColor
-        for button in [pairButton, checkButton, quitButton, logButton, yesButton, noButton] { button.bezelStyle = .rounded }
+        for button in [pairButton, checkButton, quitButton, logButton, updateButton, yesButton, noButton] { button.bezelStyle = .rounded }
+        updateButton.target = self; updateButton.action = #selector(updatePressed)
+        autoUpdateBox.target = self; autoUpdateBox.action = #selector(toggleAutomaticUpdates)
+        updateLabel.textColor = .systemBlue
+        UpdateController.shared.onChange = { [weak self] in self?.refreshUpdateRow() }
+        refreshUpdateRow()
         logButton.target = self; logButton.action = #selector(showLog)
         loginBox.target = self; loginBox.action = #selector(toggleLogin)
         yesButton.target = self; yesButton.action = #selector(answerYes)
@@ -50,13 +58,13 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         checkButton.target = self
         checkButton.action = #selector(check)
 
-        let buttons = NSStackView(views: [pairButton, checkButton, logButton, quitButton])
+        let buttons = NSStackView(views: [pairButton, checkButton, updateButton, logButton, quitButton])
         buttons.orientation = .horizontal
         buttons.spacing = 10
         let answers = NSStackView(views: [yesButton, noButton])
         answers.orientation = .horizontal
         answers.spacing = 10
-        let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, loginBox, buttons])
+        let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, updateLabel, loginBox, autoUpdateBox, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -88,6 +96,23 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         loginBox.isEnabled = login.isEnabled
     }
 
+    /// Shows the known update, if any, and keeps the button and the tick box in step with it.
+    private func refreshUpdateRow() {
+        if let release = UpdateController.shared.available {
+            updateLabel.stringValue = "TBDisplay \(release.version) is available (you have \(appVersion))."
+            updateButton.title = "Download \(release.version)…"
+        } else {
+            updateLabel.stringValue = ""
+            updateButton.title = "Check for updates…"
+        }
+        updateLabel.isHidden = updateLabel.stringValue.isEmpty
+        autoUpdateBox.state = UpdateController.shared.automaticChecks ? .on : .off
+    }
+
+    @objc private func updatePressed() {
+        if UpdateController.shared.available != nil { UpdateController.shared.openDownloadPage() } else { UpdateController.shared.checkNow() }
+    }
+    @objc private func toggleAutomaticUpdates() { UpdateController.shared.automaticChecks = (autoUpdateBox.state == .on) }
     @objc private func toggleLogin() { LoginItemControl.click(); refreshLoginBox() }
     @objc private func showLog() { LoginItemControl.revealLog(name: "client") }
     @objc private func answerYes() { onPairingAnswer?(true) }

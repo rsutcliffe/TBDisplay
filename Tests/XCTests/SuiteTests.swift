@@ -20,6 +20,7 @@ final class SuiteTests: XCTestCase {
     func testPairingSupport() { run("PairingSupport", runPairingSupportTests) }
     func testLogFile() { run("LogFile", runLogFileTests) }
     func testLoginItem() { run("LoginItem", runLoginItemTests) }
+    func testUpdateCheck() { run("UpdateCheck", runUpdateCheckTests) }
     func testVersion() { run("Version", runVersionTests) }
     func testDiagnostics() { run("Diagnostics", runDiagnosticsTests) }
     func testDiagnosticsRunner() { run("DiagnosticsRunner", runDiagnosticsRunnerTests) }

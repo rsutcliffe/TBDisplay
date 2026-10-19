@@ -54,6 +54,14 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 - Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
 - "Open at login" is a checkbox in each app. It only works for an installed app (in Applications), and macOS may ask you to allow it in System Settings.
 
+## Updates
+
+TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item, or press the same button in the iMac client window. It also checks quietly at launch, at most once a day, and shows an "Update available" line when there is one. Untick "Check for updates automatically" to stop the daily check.
+
+- The check is one request to GitHub's public API (`api.github.com`). It sends the app name and version and nothing else.
+- It never downloads or installs anything. It opens the release page in your browser, and you install the notarised disk image yourself. It ignores any link that is not this project's own release page.
+- For maintainers: the check compares the running version (`appVersion` in `Sources/Shared/Shared.swift`) with the tag of the latest published release. Tag each release `v<appVersion>`, for example `v1.8.0`, and publish it as a normal release, not a draft or pre-release.
+
 ## Environment variables
 
 None are needed to use the apps. They exist so the tests do not touch your real settings, and they are trusted input.

@@ -11,6 +11,7 @@ LOG=$(mktemp -d)
 export TBDISPLAY_LOG_DIR="$LOG/logs"      # the apps write their log files here, not into your real Library/Logs
 SUITE="tbdisplay.test.$$"
 export TBDISPLAY_PREFS_SUITE="$SUITE" TBDISPLAY_LAYOUT_FILE="$LOG/layout.json"
+defaults write "$SUITE" tbdisplay.updateCheckDisabled -bool true      # the tests never contact GitHub
 fails=0
 pass() { echo "ok   $1"; }
 fail() { echo "FAIL $1"; fails=$((fails + 1)); }

@@ -42,6 +42,12 @@ func runSharedTests() {
     check(PairingKey.exists(at: badFile) && !PairingKey.exists(at: dir.appendingPathComponent("nothing.key")), "key file existence is reported")
     check(FailureTracker.key(for: "fe80:0:0:0:aaaa:bbbb:cccc:dddd") == FailureTracker.key(for: "fe80:0:0:0:1:2:3:4"), "IPv6 addresses in one /64 count as one")
     check(FailureTracker.key(for: "192.0.2.40") == "192.0.2.40", "IPv4 addresses are kept whole")
+    // The same /64 written in different ways must still be one machine, or failures could be spread across spellings
+    check(FailureTracker.key(for: "fe80::1") == FailureTracker.key(for: "fe80:0:0:0::2"), "a compressed IPv6 address and a long one in the same /64 count as one")
+    check(FailureTracker.key(for: "2001:db8:1:2::5") == FailureTracker.key(for: "2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "short and full forms of one /64 count as one")
+    check(FailureTracker.key(for: "fe80::1%en0") == FailureTracker.key(for: "fe80::1"), "an interface suffix does not make a new address")
+    check(FailureTracker.key(for: "2001:db8:1:2::5") != FailureTracker.key(for: "2001:db8:1:3::5"), "different /64 prefixes stay separate")
+    check(FailureTracker.key(for: "2001:0DB8:1:2::5") == FailureTracker.key(for: "2001:db8:1:2::5"), "upper and lower case spell the same address")
     try? FileManager.default.removeItem(at: dir)
 
     // Sanity checks the reviewer showed were needed

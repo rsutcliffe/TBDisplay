@@ -38,6 +38,7 @@ To repeat the measurement, open `Tests/latency_clock.html` in two browser window
 ./build.sh              builds both apps into ./build
 ./build.sh test         runs the unit checks
 Tests/all.sh            runs the quiet test groups (nothing opens a window)
+Tests/test_lists.sh     checks every unit test file is wired into all three test runners
 Tests/all.sh full       runs everything, including the groups that drive real windows
 ```
 
@@ -45,9 +46,31 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 
 `Package.swift` exposes the shared code and the unit tests, so you can open the folder in Xcode. The two apps themselves are built by `build.sh`. `Resources/make-icon.sh` regenerates the app icon.
 
+## Where things are kept
+
+- Pairing key: `~/Library/Application Support/tbdisplay/pairing-key`, owner-only. A key replaced by pairing is kept beside it as `pairing-key.previous`.
+- Saved position of the virtual display: `~/Library/Application Support/tbdisplay/layout.json`.
+- Logs: `~/Library/Logs/TBDisplay/server.log` and `client.log`, owner-only, up to 1 MB each with one older copy. "Show log" in the server menu and in the client window opens the folder.
+- Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
+- "Open at login" is a checkbox in each app. It only works for an installed app (in Applications), and macOS may ask you to allow it in System Settings.
+
+## Environment variables
+
+None are needed to use the apps. They exist so the tests do not touch your real settings, and they are trusted input.
+
+| Variable | Meaning |
+|---|---|
+| `TBDISPLAY_KEY_FILE` | Path of the pairing key file |
+| `TBDISPLAY_LAYOUT_FILE` | Path of the saved display position file |
+| `TBDISPLAY_LOG_DIR` | Folder for the log files |
+| `TBDISPLAY_PREFS_SUITE` | Name of the preferences suite to use |
+| `TBDISPLAY_PAIR_PORT` | Pairing port (default 47802) |
+| `TBDISPLAY_LOCKOUT_SECONDS` | How long a client is blocked after repeated failed attempts (default 60) |
+
 ## Limits you should know about
 
 - It uses Apple's private `CGVirtualDisplay` interface, which is undocumented. A macOS update could break it without notice, and apps using it cannot be distributed through the Mac App Store.
+- While the "Pair a new Mac" window is open (at most 120 seconds), the MacBook accepts pairing connections on every network, including Wi-Fi, so pairing works wherever the two Macs can see each other. Someone else on the same network could take the single pairing slot first. They would get the key only if you clicked "Yes, it matches" when the iMac was not showing the same code, so only click Yes when both screens show the same six digits. The streaming port accepts only the Thunderbolt Bridge by default, so a copied key alone does not give a Wi-Fi visitor your screen. If you ever suspect a key was taken, choose "Create new pairing key..." in the server menu.
 - The pairing protocol and the encrypted link have had internal security reviews but no external professional audit. Do not rely on it to protect anything sensitive.
 - After a Thunderbolt cable was unplugged and plugged back in, the link did not return on my test pair until the iMac was restarted. The apps show advice about this, but it is a macOS or hardware behaviour, not something the apps fix.
 - No audio, one iMac per MacBook, and no support for Intel Macs or macOS versions before 14.

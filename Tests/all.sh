@@ -22,6 +22,7 @@ run() {   # name command...
 }
 ./build.sh > /dev/null 2>&1 || { echo "The build failed."; exit 1; }
 swift_tests() { local out; out=$(swift test 2>&1); echo "$out"; echo "$out" | grep -q "with 0 failures (0 unexpected)"; }
+run "test wiring"           Tests/test_lists.sh
 run "unit checks"            ./build.sh test
 run "Xcode package (XCTest)" swift_tests
 run "release script"         Tests/release_script_test.sh

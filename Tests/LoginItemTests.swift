@@ -15,4 +15,9 @@ func runLoginItemTests() {
     check(!LoginItemState.needsApproval.isChecked, "needs approval: not shown as on until it is allowed")
     check(!LoginItemState.unavailable.isEnabled && LoginItemState.unavailable.tapAction == .nothing, "unavailable: nothing to click")
     check(LoginItemState.unavailable.title.contains("Applications") && LoginItemState.unavailable.title.contains("reopen"), "unavailable: the text says to move the app to Applications and reopen it")
+    check(LoginItemState(systemStatus: 0) == .off, "system: not registered is off")
+    check(LoginItemState(systemStatus: 1) == .on, "system: enabled is on")
+    check(LoginItemState(systemStatus: 2) == .needsApproval, "system: requires approval needs approval")
+    check(LoginItemState(systemStatus: 3) == .off, "system: not found is off, because macOS says so for an app it has never registered")
+    check(LoginItemState(systemStatus: 99) == .unavailable, "system: an unknown answer is unavailable")
 }

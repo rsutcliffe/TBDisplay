@@ -7,14 +7,9 @@ import ServiceManagement
 enum LoginItemControl {
     static var state: LoginItemState {
         guard Bundle.main.bundleURL.pathExtension == "app" else { return .unavailable }
-        switch SMAppService.mainApp.status {
-        case .enabled: return .on
-        case .notRegistered: return .off
-        case .requiresApproval: return .needsApproval
-        default:
-            log("Open at login unavailable: system status \(SMAppService.mainApp.status.rawValue) (3 = not found) for \(Bundle.main.bundlePath).")
-            return .unavailable
-        }
+        let state = LoginItemState(systemStatus: SMAppService.mainApp.status.rawValue)
+        if state == .unavailable { log("Open at login unavailable: system status \(SMAppService.mainApp.status.rawValue) for \(Bundle.main.bundlePath).") }
+        return state
     }
 
     /// Does what a click on the control means in the current state.

@@ -19,6 +19,7 @@ final class SuiteTests: XCTestCase {
     func testPairingFlowModel() { run("PairingFlowModel", runPairingFlowModelTests) }
     func testPairingSupport() { run("PairingSupport", runPairingSupportTests) }
     func testLogFile() { run("LogFile", runLogFileTests) }
+    func testConnectionGate() { run("ConnectionGate", runConnectionGateTests) }
     func testLoginItem() { run("LoginItem", runLoginItemTests) }
     func testUpdateCheck() { run("UpdateCheck", runUpdateCheckTests) }
     func testVersion() { run("Version", runVersionTests) }

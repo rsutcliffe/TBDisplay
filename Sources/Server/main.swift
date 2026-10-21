@@ -52,6 +52,7 @@ final class Server {
     private var listener: NWListener?
     private var session: StreamSession?
     private var pendingLogged = false
+    private(set) var gate = ConnectionGate()
     private var pending: [StreamSession] = []      // shaking hands, kept alive until they finish or fail
     private let queue = DispatchQueue(label: "tbdisplay.listener")
 
@@ -87,6 +88,10 @@ final class Server {
             guard let self else { return }
             DispatchQueue.main.async { [self] in
                 let address = self.host(of: connection.endpoint)
+                if !self.gate.accepts {
+                    connection.cancel()
+                    return
+                }
                 if self.tracker.isBlocked(address) {
                     connection.cancel()
                     return
@@ -138,7 +143,16 @@ final class Server {
         try? start()
     }
 
-    func disconnect() { session?.stop() }
+    /// Drops the iMac and refuses it until `resume`, because the client would reconnect within a second.
+    func disconnect() {
+        gate.pause()
+        pending.forEach { $0.stop() }
+        pending = []
+        session?.stop()
+        log("Disconnected from the menu. New connections are refused until you choose Allow connections.")
+    }
+
+    func resume() { gate.resume(); log("Connections allowed again.") }
 
     /// Stops everything. `then` runs once the virtual display has really been removed (or after 4 seconds),
     /// because exiting first can leave macOS holding the display for minutes.

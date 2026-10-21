@@ -62,12 +62,18 @@ final class StatusController: NSObject, NSMenuDelegate {
             line("Connected: \(stats.width) x \(stats.height)")
             line(String(format: "%d Mbps, %.0f fps", stats.bitrate / 1_000_000, stats.fps))
             line(String(format: "Encode %.0f ms, send %.0f ms", stats.encodeMs, stats.sendMs))
+        } else if server.gate.isPaused {
+            line("Paused. The iMac is refused")
         } else {
             line("Waiting for the iMac")
         }
         menu.addItem(.separator())
         action("Allow iMac keyboard and mouse", #selector(toggleInput), checked: state.allowInput)
-        action("Disconnect", #selector(disconnect), enabled: stats.connected)
+        if server.gate.isPaused {
+            action("Allow connections", #selector(resume))
+        } else {
+            action("Disconnect", #selector(disconnect), enabled: stats.connected)
+        }
         menu.addItem(.separator())
         action("Pair a new Mac…", #selector(pairNewMac))
         action("Check connection…", #selector(checkConnection))
@@ -100,6 +106,8 @@ final class StatusController: NSObject, NSMenuDelegate {
     }
 
     @objc private func disconnect() { server.disconnect() }
+
+    @objc private func resume() { server.resume() }
 
     @objc private func checkForUpdates() { UpdateController.shared.checkNow() }
 

@@ -68,6 +68,14 @@ func runClientModelTests() {
     check(model(.refused(nil), .stalled).statusMessage.contains(hint), "a refusal with no reason gets the cable advice too")
     check(model(.stalled).presentation == .setupWindow, "the advice appears in the setup window")
 
+    // Disconnect on the MacBook ends the connection for good until the person asks for it again
+    check(model(.pictureShown, .endedByMacBook).phase == .ended && model(.pictureShown, .endedByMacBook).presentation == .setupWindow, "ended by the MacBook: back to the setup window")
+    check(model(.pictureShown, .endedByMacBook).statusMessage.contains("Allow connections") && model(.pictureShown, .endedByMacBook).statusMessage.contains("Reconnect"), "ended: the text says what to do next")
+    check(!model(.pictureShown, .endedByMacBook).statusMessage.contains("Retrying"), "ended: it does not claim to retry")
+    check(model(.pictureShown, .endedByMacBook, .closed(hadData: true)).phase == .ended, "the connection closing after the end notice does not change it")
+    check(model(.pictureShown, .endedByMacBook, .lost, .stalled).phase == .ended && !model(.pictureShown, .endedByMacBook, .stalled).statusMessage.contains(hint), "ended: no cable advice")
+    check(model(.endedByMacBook, .connecting).phase == .connecting, "pressing Reconnect starts a new attempt")
+
     let phases: [ClientEvent] = [.keyMissing, .keyFound, .connecting, .dataReceived, .lost, .refused(nil)]
     check(phases.allSatisfy { model($0).presentation == .setupWindow }, "only streaming is ever full screen")
 }

@@ -480,6 +480,16 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         queue.async { self.close() }
     }
 
+    /// The person chose Disconnect. The client is told so it stops retrying, then the session closes.
+    func end() {
+        queue.async {
+            guard !self.closed else { return }
+            self.connection.send(content: frameMessage(.ended, Data()), completion: .contentProcessed { [weak self] _ in
+                self?.queue.async { self?.close() }
+            })
+        }
+    }
+
     private func close() {
         guard !closed else { return }
         closed = true

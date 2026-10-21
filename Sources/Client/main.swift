@@ -183,6 +183,7 @@ final class Client {
 
     // State on `queue`
     private var model = ClientModel()
+    private var ended = false              // the MacBook said Disconnect: no retrying until the person presses Reconnect
     private var connection: NWConnection?
     private var key = Data()
     private var browser: NWBrowser?
@@ -281,6 +282,7 @@ final class Client {
     // MARK: Connecting (on queue)
 
     private func connect() {
+        guard !ended else { return }
         // The pairing key is read each time, so copying it in while the client waits is enough.
         guard let loaded = PairingKey.load() else {
             log("No pairing key. Copy pairing-key from the MacBook to \(PairingKey.defaultURL.path)")
@@ -396,6 +398,17 @@ final class Client {
         queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.connect() }
     }
 
+    /// The person pressed Reconnect after the MacBook ended the connection.
+    func reconnect() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.ended = false
+            self.lastProgress = Date()
+            self.stallReported = false
+            self.connect()
+        }
+    }
+
     private func sendHello() {
         connection?.send(content: frameMessage(.hello, hello.encode()), completion: .idempotent)
     }
@@ -416,6 +429,10 @@ final class Client {
             let text = String(decoding: payload.prefix(300), as: UTF8.self)
             log("The MacBook says: \(text)")
             event(.refused(text))
+        case .ended:
+            log("The MacBook ended the connection. Not reconnecting until asked.")
+            ended = true
+            event(.endedByMacBook)
         case .heartbeat:
             markServerData()
         case .videoConfig:
@@ -636,6 +653,7 @@ app.mainMenu = mainMenu
 
 let client = Client(options: options, screen: screen, view: videoView)
 client.onModel = present
+setupWindow?.onReconnect = { client.reconnect() }
 if options.input { videoView.onInput = { client.sendInput($0) } }
 client.start()
 

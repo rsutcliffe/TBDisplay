@@ -148,7 +148,7 @@ final class Server {
         gate.pause()
         pending.forEach { $0.stop() }
         pending = []
-        session?.stop()
+        session?.end()
         log("Disconnected from the menu. New connections are refused until you choose Allow connections.")
     }
 

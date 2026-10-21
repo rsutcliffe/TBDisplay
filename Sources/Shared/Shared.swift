@@ -30,6 +30,7 @@ enum MessageType: UInt8 {
     case pairSealed = 11     // pairing, MacBook -> iMac: the pairing key, sealed
     case pairReject = 12     // pairing, MacBook -> iMac: the person said the codes did not match
     case notice = 13         // server -> client: a sentence for the person, sent before the server closes
+    case ended = 14          // server -> client: the person chose Disconnect, so the client must not reconnect by itself
 }
 
 struct Hello {

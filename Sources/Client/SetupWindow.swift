@@ -17,9 +17,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     let loginBox = NSButton(checkboxWithTitle: "Open at login", target: nil, action: nil)
     var onQuit: (() -> Void)?
     var onCheck: (() -> Void)?
+    var onReconnect: (() -> Void)?
     var onPairingAnswer: ((Bool) -> Void)?
     private let yesButton = NSButton(title: "Yes, it matches", target: nil, action: nil)
     private let noButton = NSButton(title: "No, they differ", target: nil, action: nil)
+    private let reconnectButton = NSButton(title: "Reconnect", target: nil, action: nil)
     private let codeLabel = NSTextField(labelWithString: "")
     private var lastModel = ClientModel()
     var pairing: PairingFlowModel? { didSet { update(lastModel) } }
@@ -38,7 +40,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         keyLine.textColor = .secondaryLabelColor
         let version = NSTextField(labelWithString: "Version \(appVersion)")
         version.textColor = .secondaryLabelColor
-        for button in [pairButton, checkButton, quitButton, logButton, updateButton, yesButton, noButton] { button.bezelStyle = .rounded }
+        for button in [pairButton, checkButton, quitButton, logButton, updateButton, yesButton, noButton, reconnectButton] { button.bezelStyle = .rounded }
         updateButton.target = self; updateButton.action = #selector(updatePressed)
         autoUpdateBox.target = self; autoUpdateBox.action = #selector(toggleAutomaticUpdates)
         updateLabel.textColor = .systemBlue
@@ -49,6 +51,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         yesButton.target = self; yesButton.action = #selector(answerYes)
         noButton.target = self; noButton.action = #selector(answerNo)
         yesButton.isHidden = true; noButton.isHidden = true
+        reconnectButton.target = self; reconnectButton.action = #selector(reconnect); reconnectButton.isHidden = true
         quitButton.target = self
         quitButton.action = #selector(quit)
         quitButton.keyEquivalent = "\r"
@@ -60,7 +63,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let buttons = NSStackView(views: [pairButton, checkButton, updateButton, logButton, quitButton])
         buttons.orientation = .horizontal
         buttons.spacing = 10
-        let answers = NSStackView(views: [yesButton, noButton])
+        let answers = NSStackView(views: [yesButton, noButton, reconnectButton])
         answers.orientation = .horizontal
         answers.spacing = 10
         let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, updateLabel, loginBox, autoUpdateBox, buttons])
@@ -100,6 +103,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let asking = pairing?.asksForConfirmation == true
         yesButton.isHidden = !asking
         noButton.isHidden = !asking
+        reconnectButton.isHidden = model.phase != .ended
         keyLine.stringValue = PairingKey.load() == nil ? "Pairing key: not on this Mac" : "Pairing key: found"
         refreshLoginBox()
     }
@@ -132,6 +136,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     @objc private func showLog() { LoginItemControl.revealLog(name: "client") }
     @objc private func answerYes() { onPairingAnswer?(true) }
     @objc private func answerNo() { onPairingAnswer?(false) }
+    @objc private func reconnect() { onReconnect?() }
     @objc private func quit() { onQuit?() }
     @objc private func check() { onCheck?() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { onQuit?(); return false }

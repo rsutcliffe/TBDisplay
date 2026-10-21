@@ -11,10 +11,11 @@ enum ClientEvent: Equatable {
     case refused(String?)            // the MacBook said no, with its own reason if it gave one
     case closed(hadData: Bool)       // the connection ended
     case stalled                     // nothing has come from the MacBook for a while
+    case endedByMacBook              // the person chose Disconnect on the MacBook: do not retry
 }
 
 enum ClientPhase: Equatable {
-    case needsKey, searching, connecting, refused, waitingForPicture, streaming, lost
+    case needsKey, searching, connecting, refused, waitingForPicture, streaming, lost, ended
 }
 
 enum ClientPresentation: Equatable { case setupWindow, fullScreen }
@@ -25,6 +26,13 @@ struct ClientModel {
     private var stalled = false      // a while has passed with nothing from the MacBook
 
     mutating func handle(_ event: ClientEvent) {
+        // Once the MacBook has ended the connection, only a new attempt or a missing key changes anything.
+        if phase == .ended {
+            switch event {
+            case .connecting, .keyMissing: break
+            default: return
+            }
+        }
         switch event {
         case .keyMissing:
             phase = .needsKey
@@ -46,6 +54,8 @@ struct ClientModel {
             reason = why
         case .stalled:
             stalled = true
+        case .endedByMacBook:
+            phase = .ended
         case .closed(let hadData):
             if hadData { phase = .lost }
             else if phase != .refused { phase = .refused; reason = nil }     // a reason already given stays
@@ -71,6 +81,7 @@ struct ClientModel {
         case .waitingForPicture: return "Connected. Waiting for the picture…"
         case .streaming: return ""
         case .lost: return "Connection lost. Reconnecting…"
+        case .ended: return "The MacBook ended the connection. Choose Allow connections in its menu bar, then press Reconnect."
         }
     }
 

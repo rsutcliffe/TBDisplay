@@ -33,7 +33,7 @@ if args.flag("help") { print(usage); exit(0) }
 struct ClientOptions {
     var host: String?
     var port: UInt16 = defaultPort
-    var interfaceName: String? = defaultInterfaceName
+    var policy: InterfacePolicy = .mode(ConnectionMode.saved())
     var windowed = false
     var screenIndex = 0
     var input = false
@@ -42,8 +42,8 @@ struct ClientOptions {
 var options = ClientOptions()
 options.host = args.string("host")
 if let port = args.int("port") { options.port = UInt16(clamping: port) }
-if let name = args.string("interface") { options.interfaceName = name }
-if args.flag("any-interface") { options.interfaceName = nil }
+if let name = args.string("interface") { options.policy = .named(name) }
+if args.flag("any-interface") { options.policy = .any }
 options.windowed = args.flag("windowed")
 if let screen = args.int("screen") { options.screenIndex = screen }
 if CommandLine.arguments.contains("--pin") {
@@ -175,7 +175,7 @@ final class VideoView: NSView {
 // MARK: - Client
 
 final class Client {
-    private let options: ClientOptions
+    private var options: ClientOptions
     private let hello: Hello
     private let view: VideoView
     private let queue = DispatchQueue(label: "tbdisplay.client", qos: .userInteractive)
@@ -294,7 +294,7 @@ final class Client {
         event(.keyFound)
         if let host = options.host {
             let params = makeTCPParameters(key: key)
-            if let name = options.interfaceName {
+            if case .named(let name) = options.policy {
                 if let iface = findInterface(named: name) {
                     params.requiredInterface = iface
                 } else {
@@ -310,24 +310,25 @@ final class Client {
     }
 
     private func browse() {
-        let where_ = options.interfaceName.map { "on \($0)" } ?? "on any interface"
-        log("Looking for the MacBook \(where_)")
+        browser?.cancel()
+        log("Looking for the MacBook \(options.policy.summary)")
 
         let browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: makeTCPParameters(key: key))
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self, self.connection == nil else { return }
+            let policy = self.options.policy
             let match: (NWBrowser.Result, NWInterface?)?
-            if let name = self.options.interfaceName {
+            if case .any = policy {
+                match = results.first.map { ($0, nil) }
+            } else {
                 match = results.lazy.compactMap { result -> (NWBrowser.Result, NWInterface?)? in
-                    guard let iface = result.interfaces.first(where: { $0.name == name }) else { return nil }
+                    guard let iface = result.interfaces.first(where: { policy.allows(interfaceName: $0.name, kind: interfaceKind($0.type)) }) else { return nil }
                     return (result, iface)
                 }.first
                 if match == nil, !results.isEmpty {
                     let seen = results.flatMap { $0.interfaces.map(\.name) }
-                    log("MacBook found on \(Set(seen).sorted().joined(separator: ", ")) but not \(name). Check the cable and the Thunderbolt Bridge in Network settings.")
+                    log("MacBook found on \(Set(seen).sorted().joined(separator: ", ")) but not \(policy.summary). Check the cable, or change Connect over on both Macs.")
                 }
-            } else {
-                match = results.first.map { ($0, nil) }
             }
             guard let found = match else { return }
             let (result, iface) = found
@@ -396,6 +397,18 @@ final class Client {
         if gotServerData { lastProgress = Date(); stallReported = false }      // a link that was working starts a fresh wait
         gotServerData = false   // so the watchdog leaves the next attempt alone until it has data
         queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.connect() }
+    }
+
+    /// The person chose a different way to connect. It is saved, and the search starts again that way.
+    func setMode(_ mode: ConnectionMode) {
+        mode.save()
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.options.policy = .mode(mode)
+            self.ended = false
+            log("Connect over: \(mode.title).")
+            if self.connection != nil { self.disconnected(nil) } else { self.connect() }
+        }
     }
 
     /// The person pressed Reconnect after the MacBook ended the connection.
@@ -654,6 +667,7 @@ app.mainMenu = mainMenu
 let client = Client(options: options, screen: screen, view: videoView)
 client.onModel = present
 setupWindow?.onReconnect = { client.reconnect() }
+setupWindow?.onModeChange = { client.setMode($0) }
 if options.input { videoView.onInput = { client.sendInput($0) } }
 client.start()
 

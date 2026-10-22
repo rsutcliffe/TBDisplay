@@ -74,6 +74,17 @@ final class StatusController: NSObject, NSMenuDelegate {
         } else {
             action("Disconnect", #selector(disconnect), enabled: stats.connected)
         }
+        let modeItem = NSMenuItem(title: "Connect over", action: nil, keyEquivalent: "")
+        let modeMenu = NSMenu()
+        for mode in ConnectionMode.allCases {
+            let entry = NSMenuItem(title: mode.title, action: #selector(chooseMode(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = mode.rawValue
+            entry.state = server.policy == .mode(mode) ? .on : .off
+            modeMenu.addItem(entry)
+        }
+        modeItem.submenu = modeMenu
+        menu.addItem(modeItem)
         menu.addItem(.separator())
         action("Pair a new Mac…", #selector(pairNewMac))
         action("Check connection…", #selector(checkConnection))
@@ -108,6 +119,10 @@ final class StatusController: NSObject, NSMenuDelegate {
     @objc private func disconnect() { server.disconnect() }
 
     @objc private func resume() { server.resume() }
+
+    @objc private func chooseMode(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String, let mode = ConnectionMode(rawValue: raw) { server.setMode(mode) }
+    }
 
     @objc private func checkForUpdates() { UpdateController.shared.checkNow() }
 

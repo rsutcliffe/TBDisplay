@@ -393,6 +393,20 @@ func interfaceName(of conn: NWConnection) -> String? {
     conn.currentPath?.availableInterfaces.first?.name
 }
 
+/// What kind of interface an established connection is using, as macOS describes it.
+func interfaceKind(of conn: NWConnection) -> InterfaceKind {
+    interfaceKind(conn.currentPath?.availableInterfaces.first?.type)
+}
+
+func interfaceKind(_ type: NWInterface.InterfaceType?) -> InterfaceKind {
+    switch type {
+    case .wifi: return .wifi
+    case .wiredEthernet: return .wired
+    case .loopback: return .loopback
+    default: return .other
+    }
+}
+
 /// Looks up a live network interface object by BSD name (for example "bridge0").
 func findInterface(named name: String, timeout: TimeInterval = 1.0) -> NWInterface? {
     let monitor = NWPathMonitor()
@@ -421,6 +435,7 @@ enum Prefs {
     static let everConnected = "tbdisplay.everConnected"     // an iMac has connected to this MacBook
     static let updateCheckDisabled = "tbdisplay.updateCheckDisabled"   // the person turned automatic update checks off
     static let lastUpdateCheck = "tbdisplay.lastUpdateCheck"           // when the last successful check finished
+    static let connectionMode = "tbdisplay.connectionMode"             // Thunderbolt, Wi-Fi or Ethernet
 }
 
 // MARK: - Logging and arguments

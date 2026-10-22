@@ -19,7 +19,7 @@ struct ServerOptions {
     var adaptBitrate = true
     var fps = 60
     var maxInFlight = 2
-    var allowedInterfaces: Set<String>? = [defaultInterfaceName] // nil means any interface
+    var policy: InterfacePolicy = .mode(ConnectionMode.saved())     // the menu changes it while the app runs
     var hiDPI = true
 }
 
@@ -78,9 +78,12 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
             switch state {
             case .ready:
                 let name = interfaceName(of: self.connection)
-                if let allowed = self.options.allowedInterfaces, !allowed.contains(name ?? "") {
-                    log("Rejected \(self.connection.endpoint) on \(name ?? "an unknown interface"). Only \(allowed.sorted().joined(separator: ", ")) is allowed (use --any-interface to change).")
-                    self.close()
+                if !self.options.policy.allows(interfaceName: name ?? "", kind: interfaceKind(of: self.connection)) {
+                    log("Rejected \(self.connection.endpoint) on \(name ?? "an unknown interface"). This Mac accepts connections \(self.options.policy.summary) (change Connect over in the menu bar item).")
+                    // The iMac is told why, so its window can say so instead of just losing the connection.
+                    self.connection.send(content: frameMessage(.notice, Data(self.options.policy.refusalNotice.utf8)), completion: .contentProcessed { [weak self] _ in
+                        self?.queue.async { self?.close() }
+                    })
                     return
                 }
                 guard negotiatedAsExpected(self.connection) else {

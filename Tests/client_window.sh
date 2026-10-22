@@ -32,18 +32,22 @@ texts=$(ax 'get value of every static text of window "TBDisplay"')
 echo "$texts" | grep -q "No pairing key" && pass "the window says there is no pairing key" || fail "no 'No pairing key' text (got: ${texts:0:100})"
 echo "$texts" | grep -qE "Version [0-9]+\.[0-9]+" && pass "the window shows the app version" || fail "no version shown"
 buttons=$(ax 'get name of every button of window "TBDisplay"')
-for b in "Pair with MacBook…" "Check connection…" "Check for updates…" "Show log" "Quit"; do
+for b in "Pair with MacBook…" "Check connection…" "Show log" "Quit"; do
     echo "$buttons" | grep -q "$b" && pass "button: $b" || fail "missing button: $b (got: $buttons)"
 done
 # Every button must sit inside the window with a margin, not touch or pass its right edge
 read -r wx wy < <(ax 'get position of window "TBDisplay"' | tr -d ',' | tr -s ' ')
 read -r ww wh < <(ax 'get size of window "TBDisplay"' | tr -d ',' | tr -s ' ')
-for b in "Pair with MacBook…" "Check connection…" "Check for updates…" "Show log" "Quit"; do
+for b in "Pair with MacBook…" "Check connection…" "Show log" "Quit"; do
     read -r bx by < <(ax "get position of button \"$b\" of window \"TBDisplay\"" | tr -d ',' | tr -s ' ')
     read -r bw bh < <(ax "get size of button \"$b\" of window \"TBDisplay\"" | tr -d ',' | tr -s ' ')
     margin=$(( (wx + ww) - (bx + bw) ))
     [ "$margin" -ge 16 ] && [ "$bx" -ge $((wx + 16)) ] && pass "button \"$b\" sits inside the window (right margin ${margin} pt)" || fail "button \"$b\" touches or passes the window edge (right margin ${margin} pt, window ${wx}..$((wx + ww)))"
 done
+echo "$buttons" | grep -q "Check for updates…" && fail "the Check for updates button is still there" || pass "there is no Check for updates button (the link appears only when a release is newer)"
+popup=$(ax 'get value of every pop up button of window "TBDisplay"')
+echo "$popup" | grep -q "Thunderbolt" && pass "the Connect over pop-up shows Thunderbolt by default" || fail "no Connect over pop-up showing Thunderbolt (got: $popup)"
+echo "$texts" | grep -q "Connect over" && pass "the Connect over label is shown" || fail "no Connect over label"
 boxes=$(ax 'get name of every checkbox of window "TBDisplay"')
 check_inside tbdisplay-client "TBDisplay"
 echo "$boxes" | grep -q "Open at login" && pass "the Open at login checkbox is shown" || fail "no Open at login checkbox (got: $boxes)"

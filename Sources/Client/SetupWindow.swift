@@ -11,13 +11,14 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     let checkButton = NSButton(title: "Check connection…", target: nil, action: nil)
     let quitButton = NSButton(title: "Quit", target: nil, action: nil)
     let logButton = NSButton(title: "Show log", target: nil, action: nil)
-    let updateButton = NSButton(title: "Check for updates…", target: nil, action: nil)
     let autoUpdateBox = NSButton(checkboxWithTitle: "Check for updates automatically", target: nil, action: nil)
-    private let updateLabel = NSTextField(labelWithString: "")
+    private let updateLink = NSButton(title: "", target: nil, action: nil)      // "TBDisplay X is available", opens the release page
+    private let modePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     let loginBox = NSButton(checkboxWithTitle: "Open at login", target: nil, action: nil)
     var onQuit: (() -> Void)?
     var onCheck: (() -> Void)?
     var onReconnect: (() -> Void)?
+    var onModeChange: ((ConnectionMode) -> Void)?
     var onPairingAnswer: ((Bool) -> Void)?
     private let yesButton = NSButton(title: "Yes, it matches", target: nil, action: nil)
     private let noButton = NSButton(title: "No, they differ", target: nil, action: nil)
@@ -40,10 +41,14 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         keyLine.textColor = .secondaryLabelColor
         let version = NSTextField(labelWithString: "Version \(appVersion)")
         version.textColor = .secondaryLabelColor
-        for button in [pairButton, checkButton, quitButton, logButton, updateButton, yesButton, noButton, reconnectButton] { button.bezelStyle = .rounded }
-        updateButton.target = self; updateButton.action = #selector(updatePressed)
+        for button in [pairButton, checkButton, quitButton, logButton, yesButton, noButton, reconnectButton] { button.bezelStyle = .rounded }
+        updateLink.target = self; updateLink.action = #selector(updatePressed)
+        updateLink.isBordered = false
+        updateLink.setButtonType(.momentaryChange)
+        modePopUp.addItems(withTitles: ConnectionMode.allCases.map(\.title))
+        modePopUp.selectItem(at: ConnectionMode.allCases.firstIndex(of: ConnectionMode.saved()) ?? 0)
+        modePopUp.target = self; modePopUp.action = #selector(modeChosen)
         autoUpdateBox.target = self; autoUpdateBox.action = #selector(toggleAutomaticUpdates)
-        updateLabel.textColor = .systemBlue
         UpdateController.shared.onChange = { [weak self] in self?.refreshUpdateRow() }
         refreshUpdateRow()
         logButton.target = self; logButton.action = #selector(showLog)
@@ -60,13 +65,16 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         checkButton.target = self
         checkButton.action = #selector(check)
 
-        let buttons = NSStackView(views: [pairButton, checkButton, updateButton, logButton, quitButton])
+        let buttons = NSStackView(views: [pairButton, checkButton, logButton, quitButton])
         buttons.orientation = .horizontal
         buttons.spacing = 10
         let answers = NSStackView(views: [yesButton, noButton, reconnectButton])
         answers.orientation = .horizontal
         answers.spacing = 10
-        let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, updateLabel, loginBox, autoUpdateBox, buttons])
+        let modeRow = NSStackView(views: [NSTextField(labelWithString: "Connect over:"), modePopUp])
+        modeRow.orientation = .horizontal
+        modeRow.spacing = 8
+        let stack = NSStackView(views: [title, status, codeLabel, answers, keyLine, version, updateLink, modeRow, loginBox, autoUpdateBox, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -115,21 +123,27 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         loginBox.isEnabled = login.isEnabled
     }
 
-    /// Shows the known update, if any, and keeps the button and the tick box in step with it.
+    /// Shows the known update, if any, as a link to its release page, and keeps the tick box in step.
     private func refreshUpdateRow() {
         if let release = UpdateController.shared.available {
-            updateLabel.stringValue = "TBDisplay \(release.version) is available (you have \(appVersion))."
-            updateButton.title = "Download \(release.version)…"
+            let text = "TBDisplay \(release.version) is available (you have \(appVersion))."
+            updateLink.attributedTitle = NSAttributedString(string: text, attributes: [
+                .foregroundColor: NSColor.systemBlue,
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+            updateLink.toolTip = "Open the release page on GitHub"
+            updateLink.isHidden = false
         } else {
-            updateLabel.stringValue = ""
-            updateButton.title = "Check for updates…"
+            updateLink.attributedTitle = NSAttributedString(string: "")
+            updateLink.isHidden = true
         }
-        updateLabel.isHidden = updateLabel.stringValue.isEmpty
         autoUpdateBox.state = UpdateController.shared.automaticChecks ? .on : .off
     }
 
-    @objc private func updatePressed() {
-        if UpdateController.shared.available != nil { UpdateController.shared.openDownloadPage() } else { UpdateController.shared.checkNow() }
+    @objc private func updatePressed() { UpdateController.shared.openDownloadPage() }
+    @objc private func modeChosen() {
+        let index = modePopUp.indexOfSelectedItem
+        if ConnectionMode.allCases.indices.contains(index) { onModeChange?(ConnectionMode.allCases[index]) }
     }
     @objc private func toggleAutomaticUpdates() { UpdateController.shared.automaticChecks = (autoUpdateBox.state == .on) }
     @objc private func toggleLogin() { LoginItemControl.click(); refreshLoginBox() }

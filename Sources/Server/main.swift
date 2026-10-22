@@ -14,7 +14,7 @@ Usage: tbdisplay-server [options]
   --no-adapt          Keep the bitrate fixed
   --fps N             Frame rate cap (default 60)
   --max-in-flight N   Frames allowed in the encoder or socket at once (default 2)
-  --interface NAME    Only accept clients on this interface (default \(defaultInterfaceName))
+  --interface NAME    Only accept clients on this interface (default: the Connect over choice in the menu bar item, Thunderbolt at first)
   --any-interface     Accept clients on any interface, including Wi-Fi (not recommended)
   --no-hidpi          Run the iMac at native pixels instead of Retina scaling
   --help              Show this help
@@ -38,13 +38,13 @@ if let port = args.int("port") { options.port = UInt16(clamping: port) }
 if let mbps = args.int("bitrate") { options.bitrate = max(5, mbps) * 1_000_000 }
 if let fps = args.int("fps") { options.fps = min(max(fps, 10), 120) }
 if let n = args.int("max-in-flight") { options.maxInFlight = min(max(n, 1), 8) }
-if let name = args.string("interface") { options.allowedInterfaces = [name] }
-if args.flag("any-interface") { options.allowedInterfaces = nil }
+if let name = args.string("interface") { options.policy = .named(name) }
+if args.flag("any-interface") { options.policy = .any }
 if args.flag("no-hidpi") { options.hiDPI = false }
 if args.flag("no-adapt") { options.adaptBitrate = false }
 
 final class Server {
-    private let options: ServerOptions
+    private var options: ServerOptions
     let state: ServerState
     private let tracker = FailureTracker()
     private var key: Data
@@ -75,8 +75,7 @@ final class Server {
             guard let self else { return }
             switch state {
             case .ready:
-                let scope = self.options.allowedInterfaces.map { "on \($0.sorted().joined(separator: ", "))" } ?? "on any interface"
-                log("Listening on port \(self.options.port) \(scope). Start tbdisplay-client on the iMac.")
+                log("Listening on port \(self.options.port), accepting connections \(self.options.policy.summary). Start tbdisplay-client on the iMac.")
             case .failed(let error):
                 log("Listener failed: \(error)")
                 exit(1)
@@ -153,6 +152,19 @@ final class Server {
     }
 
     func resume() { gate.resume(); log("Connections allowed again.") }
+
+    var policy: InterfacePolicy { options.policy }
+
+    /// The person chose how the iMac reaches this Mac. It is saved, applies to the next connection, and the current
+    /// one ends so the iMac meets the new rule (and is told what it is) instead of carrying on the old way.
+    func setMode(_ mode: ConnectionMode) {
+        mode.save()
+        options.policy = .mode(mode)
+        log("Connect over: \(mode.title). Connections are accepted \(options.policy.summary).")
+        pending.forEach { $0.stop() }
+        pending = []
+        session?.end()
+    }
 
     /// Stops everything. `then` runs once the virtual display has really been removed (or after 4 seconds),
     /// because exiting first can leave macOS holding the display for minutes.

@@ -126,6 +126,7 @@ $S --port $PORT 2> "$LOG/s2" &
 sleep 1
 client 2> "$LOG/c5" &
 wait_for "$LOG/s2" "Rejected" 10 && pass "loopback refused without --any-interface" || fail "interface limit not enforced"
+wait_for "$LOG/c5" "accepts Thunderbolt only" 6 && pass "the refused client is told which connection this Mac accepts" || fail "the refused client was not told why (got: $(tail -2 "$LOG/c5" | cut -c1-100))"
 pkill -TERM -f "$C"; stop_all
 
 # 5b. A client with a different version is told which Mac to update

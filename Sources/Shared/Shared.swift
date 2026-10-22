@@ -393,6 +393,9 @@ func interfaceName(of conn: NWConnection) -> String? {
     conn.currentPath?.availableInterfaces.first?.name
 }
 
+/// What kind of network interface this is, as macOS describes it.
+enum InterfaceKind: Equatable { case wifi, wired, loopback, other }
+
 /// What kind of interface an established connection is using, as macOS describes it.
 func interfaceKind(of conn: NWConnection) -> InterfaceKind {
     interfaceKind(conn.currentPath?.availableInterfaces.first?.type)

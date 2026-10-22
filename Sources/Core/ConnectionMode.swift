@@ -3,8 +3,6 @@
 
 import Foundation
 
-enum InterfaceKind: Equatable { case wifi, wired, loopback, other }
-
 enum ConnectionMode: String, CaseIterable, Equatable {
     case thunderbolt, wifi, ethernet
 

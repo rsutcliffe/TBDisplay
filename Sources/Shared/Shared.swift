@@ -13,7 +13,7 @@ import Security
 let serviceType = "_tbdisplay._tcp"
 let defaultPort: UInt16 = 47800
 let protocolVersion: UInt32 = 5
-let appVersion = "1.8.3"      // shown in the windows and menus, so mismatched copies are easy to spot
+let appVersion = "1.9.0"      // shown in the windows and menus, so mismatched copies are easy to spot
 let maxMessageSize = 64 * 1024 * 1024
 let defaultInterfaceName = "bridge0" // Thunderbolt Bridge on macOS
 

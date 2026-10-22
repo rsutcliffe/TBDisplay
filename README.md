@@ -16,7 +16,7 @@ So I wrote two small macOS apps. The server runs on the MacBook, creates a virtu
 - Keeps the picture steady over long sessions: at most two frames are in flight, and a newer frame replaces a waiting one, so delay does not build up.
 - Encrypts the link (TLS 1.2, ECDHE-PSK with ChaCha20-Poly1305) with a pairing key shared by the two Macs.
 - Pairs without copying files: the MacBook and the iMac each show a six-digit code, and you confirm they match.
-- Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you ask for another interface.
+- Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you choose another way in **Connect over**: Wi-Fi or Ethernet (a wired adapter, which includes a USB network link between the Macs). Set the same choice on both Macs. If they differ, the iMac window says which one the MacBook accepts.
 - Optionally forwards the iMac's keyboard and mouse to the MacBook (switched on from the server's menu bar item).
 - Leaves sound alone. Audio stays on the MacBook.
 
@@ -56,7 +56,7 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 
 ## Updates
 
-TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item, or press the same button in the iMac client window. It also checks quietly at launch, at most once a day, and shows an "Update available" line when there is one. Untick "Check for updates automatically" to stop the daily check.
+TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item. The iMac client has no button for it: it checks quietly at launch, at most once a day, and shows "TBDisplay X is available" as a link to the release page when there is a newer one. The MacBook does the same through an "Update available" menu item. Untick "Check for updates automatically" to stop the daily check.
 
 - The check is one request to GitHub's public API (`api.github.com`). It sends the app name and version and nothing else.
 - It never downloads or installs anything. It opens the release page in your browser, and you install the notarised disk image yourself. It ignores any link that is not this project's own release page.
@@ -78,7 +78,7 @@ None are needed to use the apps. They exist so the tests do not touch your real 
 ## Limits you should know about
 
 - It uses Apple's private `CGVirtualDisplay` interface, which is undocumented. A macOS update could break it without notice, and apps using it cannot be distributed through the Mac App Store.
-- While the "Pair a new Mac" window is open (at most 120 seconds), the MacBook accepts pairing connections on every network, including Wi-Fi, so pairing works wherever the two Macs can see each other. Someone else on the same network could take the single pairing slot first. They would get the key only if you clicked "Yes, it matches" when the iMac was not showing the same code, so only click Yes when both screens show the same six digits. The streaming port accepts only the Thunderbolt Bridge by default, so a copied key alone does not give a Wi-Fi visitor your screen. If you ever suspect a key was taken, choose "Create new pairing key..." in the server menu.
+- While the "Pair a new Mac" window is open (at most 120 seconds), the MacBook accepts pairing connections on every network, including Wi-Fi, so pairing works wherever the two Macs can see each other. Someone else on the same network could take the single pairing slot first. They would get the key only if you clicked "Yes, it matches" when the iMac was not showing the same code, so only click Yes when both screens show the same six digits. The streaming port accepts only the Thunderbolt Bridge by default, so a copied key alone does not give a Wi-Fi visitor your screen. Choosing Wi-Fi or Ethernet in **Connect over** lets other devices on that network reach the streaming port, with the pairing key and the encrypted link as the only protection, so leave it on Thunderbolt unless you need the other way. If you ever suspect a key was taken, choose "Create new pairing key..." in the server menu.
 - The pairing protocol and the encrypted link have had internal security reviews but no external professional audit. Do not rely on it to protect anything sensitive.
 - After a Thunderbolt cable was unplugged and plugged back in, the link did not return on my test pair until the iMac was restarted. The apps show advice about this, but it is a macOS or hardware behaviour, not something the apps fix.
 - No audio, one iMac per MacBook, and no support for Intel Macs or macOS versions before 14.

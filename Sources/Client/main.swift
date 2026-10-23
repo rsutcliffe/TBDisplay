@@ -183,6 +183,7 @@ final class Client {
 
     // State on `queue`
     private var model = ClientModel()
+    private var browseStartedAt = Date()     // when the current search for the MacBook began
     private var ended = false              // the MacBook said Disconnect: no retrying until the person presses Reconnect
     private var connection: NWConnection?
     private var key = Data()
@@ -246,6 +247,12 @@ final class Client {
                self.model.phase != .streaming, self.model.phase != .waitingForPicture {
                 self.stallReported = true
                 self.event(.stalled)
+            }
+            // A search that has found nothing for a while is started afresh: after a cable link returns, Bonjour can
+            // stay silent about the Thunderbolt Bridge until the client is restarted.
+            if self.connection == nil, self.browser != nil, !self.ended,
+               BrowseRefresh.due(startedAt: self.browseStartedAt, now: Date()) {
+                self.browse()
             }
             guard self.connection != nil,
                   Watchdog.shouldDrop(armed: self.gotServerData, lastMessage: self.lastMessage, now: Date(), limit: 4) else { return }
@@ -311,6 +318,7 @@ final class Client {
 
     private func browse() {
         browser?.cancel()
+        browseStartedAt = Date()
         log("Looking for the MacBook \(options.policy.summary)")
 
         let browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: makeTCPParameters(key: key))

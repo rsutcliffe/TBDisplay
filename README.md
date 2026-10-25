@@ -54,6 +54,12 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 - Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
 - "Open at login" is a checkbox in each app. It only works when the app runs from the Applications folder, not from Downloads or straight from the disk image, so move it there and reopen it. macOS may then ask you to allow it in System Settings.
 
+## If it will not connect
+
+Press **Check connection...** in the iMac window. The iMac really tries to reach the MacBook over the connection chosen in **Connect over**, and the top line of the report says why it cannot: the MacBook cannot be seen, it is visible only over another kind of connection, it did not answer, it does not accept this iMac's pairing key, or it sent its own reason (for example that it is paused or accepts another connection). The cable and Thunderbolt Bridge findings follow underneath. If the MacBook answers, a complaint about another cable is shown as a note.
+
+On the MacBook, the same button shows what the MacBook knows: whether it is paused, which connection it accepts, and whether an iMac has ever connected. Choosing **Disconnect** in the MacBook's menu pauses it until you choose **Allow connections**. While it is paused it tells any iMac that asks, so the iMac window says so. `tbdisplay-client --check` prints the iMac's report in Terminal.
+
 ## Updates
 
 TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item. The iMac client has no button for it: it checks quietly at launch, at most once a day, and shows "TBDisplay X is available" as a link to the release page when there is a newer one. The MacBook does the same through an "Update available" menu item. Untick "Check for updates automatically" to stop the daily check.

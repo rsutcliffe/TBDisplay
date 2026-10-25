@@ -62,7 +62,7 @@ struct ClientModel {
         }
     }
 
-    private static let cableAdvice = "Still nothing after a while. Check the cable is fully in at both ends and that TBDisplay is running on the MacBook. If the cable was unplugged and plugged back in, try restarting this iMac."
+    private static let cableAdvice = "Still nothing after a while. Check the cable is fully in at both ends and that TBDisplay is running on the MacBook. If the cable was unplugged and plugged back in, try restarting this iMac. Press Check connection to find out why."
 
     var statusMessage: String {
         let base = baseMessage

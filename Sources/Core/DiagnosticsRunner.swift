@@ -46,11 +46,14 @@ enum DiagnosticsRunner {
     }
 
     /// The whole check on this Mac: reads the three sources and builds the report.
-    static func run(appVersion: String, protocolVersion: UInt32) -> String {
+    /// `extra` is what the app learned by really trying to connect (or about itself): it goes first, so the top line is the real reason.
+    static func run(appVersion: String, protocolVersion: UInt32, extra: (findings: [Finding], outcome: ProbeOutcome?) = ([], nil)) -> String {
         let thunderbolt = output(of: "/usr/sbin/system_profiler", ["SPThunderboltDataType"], timeout: 20)
         let usb = output(of: "/usr/sbin/system_profiler", ["SPUSBHostDataType"], timeout: 20)
         let bridge = output(of: "/sbin/ifconfig", ["bridge0"], timeout: 5)
-        let findings = Diagnostics.thunderbolt(thunderbolt) + Diagnostics.usb(usb) + Diagnostics.bridge(bridge)
+        var cable = Diagnostics.thunderbolt(thunderbolt) + Diagnostics.usb(usb) + Diagnostics.bridge(bridge)
+        if let outcome = extra.outcome { cable = ConnectionProbe.reconcile(cable: cable, outcome: outcome) }
+        let findings = extra.findings + cable
         return Diagnostics.report(findings, appVersion: appVersion, protocolVersion: protocolVersion)
     }
 }

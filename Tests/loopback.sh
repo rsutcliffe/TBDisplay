@@ -137,6 +137,31 @@ $C --port $BH --windowed --any-interface --host 127.0.0.1 2> "$LOG/c5a" &
 wait_for "$LOG/c5a" "No answer from the MacBook" 15 && pass "a connection that never gets going is dropped and tried again" || fail "the client waited for ever on a connection that never got going (got: $(tail -2 "$LOG/c5a" | cut -c1-100))"
 pkill -TERM -f "$C" 2>/dev/null; pkill -f "nc -l $BH" 2>/dev/null; pkill -f "sleep 40" 2>/dev/null; sleep 1
 
+# 5d. Check connection says why: answered, wrong kind of connection, paused from the menu
+$S --port $PORT --any-interface 2> "$LOG/s7" &
+sleep 2
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "The MacBook answered" && pass "the check says the MacBook answered" || fail "the check did not say the MacBook answered (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+stop_all
+$S --port $PORT 2> "$LOG/s8" &
+sleep 2
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "accepts Thunderbolt only" && pass "the check says which connection the MacBook accepts" || fail "the check did not name the accepted connection (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+stop_all
+$S --port $PORT --any-interface 2> "$LOG/s9" &
+client 2> "$LOG/c9" &
+wait_for "$LOG/s9" "Streaming" 25 && pass "a client streams before the pause check" || fail "no streaming before the pause check"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Disconnect" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/s9" "Disconnected from the menu" 10 && pass "Disconnect from the menu pauses the MacBook" || fail "the menu Disconnect did not pause the MacBook"
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "has paused connections" && pass "the check says the MacBook is paused" || fail "the check did not say the MacBook is paused (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+grep -q "Turned away" "$LOG/s9" && pass "the MacBook log says it turned the iMac away" || fail "no turned-away line in the MacBook log"
+stop_all
+
 # 5b. A client with a different version is told which Mac to update
 swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/Shared/Shared.swift Tests/probe/main.swift -o "$LOG/probe" 2>/dev/null
 $S --port $PORT --any-interface 2> "$LOG/s5" &

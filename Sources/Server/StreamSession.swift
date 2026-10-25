@@ -20,6 +20,7 @@ struct ServerOptions {
     var fps = 60
     var maxInFlight = 2
     var policy: InterfacePolicy = .mode(ConnectionMode.saved())     // the menu changes it while the app runs
+    var pausedNotice: String?          // set while Disconnect has paused this MacBook: the iMac is told, then closed
     var hiDPI = true
 }
 
@@ -78,6 +79,13 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
             switch state {
             case .ready:
                 let name = interfaceName(of: self.connection)
+                if let paused = self.options.pausedNotice {
+                    log("Turned away \(self.connection.endpoint): connections are paused.")
+                    self.connection.send(content: frameMessage(.notice, Data(paused.utf8)), completion: .contentProcessed { [weak self] _ in
+                        self?.queue.async { self?.close() }
+                    })
+                    return
+                }
                 if !self.options.policy.allows(interfaceName: name ?? "", kind: interfaceKind(of: self.connection)) {
                     log("Rejected \(self.connection.endpoint) on \(name ?? "an unknown interface"). This Mac accepts connections \(self.options.policy.summary) (change Connect over in the menu bar item).")
                     // The iMac is told why, so its window can say so instead of just losing the connection.

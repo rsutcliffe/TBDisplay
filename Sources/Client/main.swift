@@ -22,12 +22,13 @@ Usage: tbdisplay-client [options]
 
 Pairing: this Mac needs the same pairing key as the MacBook, in the same place. Copy pairing-key from the
 MacBook by AirDrop into ~/Library/Application Support/tbdisplay/ on this Mac.
+  --check             Print the connection check (what the Check connection button shows) and exit
   --help              Show this help
 """
 
 LogFile.shared = LogFile(url: LogFile.defaultURL(name: "client"))
 
-let args = Arguments(flagNames: ["any-interface", "windowed", "input", "help"])
+let args = Arguments(flagNames: ["any-interface", "windowed", "input", "check", "help"])
 if args.flag("help") { print(usage); exit(0) }
 
 struct ClientOptions {
@@ -51,6 +52,12 @@ if CommandLine.arguments.contains("--pin") {
     exit(1)
 }
 options.input = args.flag("input")
+
+// --check: the same check as the Check connection button, printed here, for support and for the tests
+if args.flag("check") {
+    print(DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion, extra: MacBookProbe.run(policy: options.policy)))
+    exit(0)
+}
 
 // MARK: - Window and video view
 
@@ -644,6 +651,7 @@ func present(_ model: ClientModel) {
 }
 if options.windowed { window.makeKeyAndOrderFront(nil) }
 let reportWindow = ReportWindow()
+reportWindow.extra = { MacBookProbe.run(policy: options.policy) }
 setupWindow?.onCheck = { reportWindow.show() }
 let pairingController = PairingGuestController()
 pairingController.onChange = { setupWindow?.pairing = $0 }

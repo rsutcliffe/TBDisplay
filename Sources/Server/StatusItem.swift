@@ -10,7 +10,17 @@ final class StatusController: NSObject, NSMenuDelegate {
     private var timer: Timer?
     private var shownConnected = false
     private var pairingPanel: PairingPanel?
-    private lazy var reportWindow = ReportWindow()
+    private lazy var reportWindow: ReportWindow = {
+        let window = ReportWindow()
+        window.extra = { [unowned self] in
+            // Read on the main thread, where the server's state belongs
+            DispatchQueue.main.sync {
+                (ServerStatus.findings(paused: self.server.gate.isPaused, policy: self.server.policy,
+                                       everConnected: Prefs.defaults.bool(forKey: Prefs.everConnected)), nil)
+            }
+        }
+        return window
+    }()
     private lazy var checklistWindow = ChecklistWindow(role: .server) { [weak self] action in
         switch action {
         case .openSettings(let url): NSWorkspace.shared.open(url)

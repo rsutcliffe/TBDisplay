@@ -4,6 +4,8 @@
 import Foundation
 
 struct ConnectionGate: Equatable {
+    /// What an iMac is told when it arrives while this MacBook is paused.
+    static let pausedNotice = "This MacBook has paused connections. Choose Allow connections in its menu bar item."
     private(set) var isPaused = false
     var accepts: Bool { !isPaused }
     mutating func pause() { isPaused = true }

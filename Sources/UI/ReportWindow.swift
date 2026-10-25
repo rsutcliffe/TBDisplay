@@ -56,6 +56,9 @@ final class ReportWindow: NSObject, NSWindowDelegate {
         panel.center()
     }
 
+    /// What the app adds to the cable report, worked out away from the main thread (the client really tries to connect).
+    var extra: (() -> (findings: [Finding], outcome: ProbeOutcome?))?
+
     func show() {
         runCheck()
         NSApp.activate(ignoringOtherApps: true)
@@ -63,10 +66,10 @@ final class ReportWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func runCheck() {
-        textView.string = "Checking…\n\nThis takes a few seconds."
+        textView.string = "Checking…\n\nThis takes up to 20 seconds."
         again.isEnabled = false
         DispatchQueue.global(qos: .userInitiated).async {
-            let report = DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion)
+            let report = DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion, extra: self.extra?() ?? ([], nil))
             DispatchQueue.main.async {
                 self.textView.string = report
                 self.again.isEnabled = true

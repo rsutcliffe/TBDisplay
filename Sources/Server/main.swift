@@ -87,10 +87,6 @@ final class Server {
             guard let self else { return }
             DispatchQueue.main.async { [self] in
                 let address = self.host(of: connection.endpoint)
-                if !self.gate.accepts {
-                    connection.cancel()
-                    return
-                }
                 if self.tracker.isBlocked(address) {
                     connection.cancel()
                     return
@@ -102,7 +98,9 @@ final class Server {
                     return
                 }
                 self.pendingLogged = false
-                let session = StreamSession(connection: connection, options: self.options, state: self.state)
+                var sessionOptions = self.options
+                if !self.gate.accepts { sessionOptions.pausedNotice = ConnectionGate.pausedNotice }
+                let session = StreamSession(connection: connection, options: sessionOptions, state: self.state)
                 self.pending.append(session)
                 session.onHandshakeFailed = { [weak self] in
                     guard let self else { return }

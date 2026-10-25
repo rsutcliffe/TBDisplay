@@ -129,6 +129,14 @@ wait_for "$LOG/s2" "Rejected" 10 && pass "loopback refused without --any-interfa
 wait_for "$LOG/c5" "accepts Thunderbolt only" 6 && pass "the refused client is told which connection this Mac accepts" || fail "the refused client was not told why (got: $(tail -2 "$LOG/c5" | cut -c1-100))"
 pkill -TERM -f "$C"; stop_all
 
+# 5a. A connection that opens but never gets going is dropped and tried again, so the client never sits on "Connecting..." for good
+BH=47813
+( nc -l $BH > /dev/null 2>&1 & )
+sleep 1
+$C --port $BH --windowed --any-interface --host 127.0.0.1 2> "$LOG/c5a" &
+wait_for "$LOG/c5a" "No answer from the MacBook" 15 && pass "a connection that never gets going is dropped and tried again" || fail "the client waited for ever on a connection that never got going (got: $(tail -2 "$LOG/c5a" | cut -c1-100))"
+pkill -TERM -f "$C" 2>/dev/null; pkill -f "nc -l $BH" 2>/dev/null; sleep 1
+
 # 5b. A client with a different version is told which Mac to update
 swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/Shared/Shared.swift Tests/probe/main.swift -o "$LOG/probe" 2>/dev/null
 $S --port $PORT --any-interface 2> "$LOG/s5" &

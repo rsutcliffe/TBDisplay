@@ -183,6 +183,7 @@ final class Client {
 
     // State on `queue`
     private var model = ClientModel()
+    private static let connectTimeout: TimeInterval = 8
     private var browseStartedAt = Date()     // when the current search for the MacBook began
     private var ended = false              // the MacBook said Disconnect: no retrying until the person presses Reconnect
     private var connection: NWConnection?
@@ -390,6 +391,14 @@ final class Client {
             }
         }
         conn.start(queue: queue)
+        // A connection that never gets going (a handshake nobody answers, an address that went stale) waits for ever
+        // otherwise, and the client sits on "Connecting..." until it is quit.
+        queue.asyncAfter(deadline: .now() + Client.connectTimeout) { [weak self] in
+            guard let self, self.connection === conn else { return }
+            if case .ready = conn.state { return }
+            log("No answer from the MacBook after \(Int(Client.connectTimeout)) seconds. Trying again.")
+            self.disconnected(nil)
+        }
     }
 
     private func disconnected(_ error: Error?, lost: Bool = false) {

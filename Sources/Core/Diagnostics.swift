@@ -40,7 +40,7 @@ enum Diagnostics {
             if line.hasSuffix(":"), line.contains("Mac") { device = String(line.dropLast()); continue }
             if let device, line.hasPrefix("Link Speed:"), line.contains("480 Mb/s") {
                 return [Finding(level: .problem, title: "The other Mac is connected over USB 2 only",
-                                detail: "\(device) is visible to this Mac only as a USB 2 device (480 Mb/s). This cable carries USB but not Thunderbolt. Use a Thunderbolt 4 cable (40 Gbps), 1 metre or shorter.")]
+                                detail: "\(device) is visible to this Mac only as a USB 2 device (480 Mb/s), so the Thunderbolt part of the link has not formed. That can be the cable, or a stale Thunderbolt Bridge on either Mac.")]
             }
         }
         return []
@@ -54,7 +54,7 @@ enum Diagnostics {
         }
         if text.contains("status: inactive") {
             return [Finding(level: .problem, title: "Thunderbolt Bridge is not active",
-                            detail: "The bridge has no link. The cable may not be Thunderbolt, or the other Mac is asleep or not connected.")]
+                            detail: "The bridge has no link. The other Mac may be asleep or not connected, or the Thunderbolt link has not formed.")]
         }
         if text.contains("status: active") {
             let address = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -66,6 +66,14 @@ enum Diagnostics {
             return [Finding(level: .note, title: "Thunderbolt Bridge has no address yet", detail: "Wait a few seconds and check again.")]
         }
         return [Finding(level: .note, title: "Could not read the Thunderbolt Bridge status", detail: "macOS gave an answer TBDisplay does not understand.")]
+    }
+
+    /// What has worked in practice when the Thunderbolt link will not form. Only offered when the cable-level checks found a problem.
+    static func advice(_ findings: [Finding]) -> [Finding] {
+        let linkProblems: Set<String> = ["No Thunderbolt device on any port", "The other Mac is connected over USB 2 only", "Thunderbolt Bridge is not active"]
+        guard findings.contains(where: { $0.level == .problem && linkProblems.contains($0.title) }) else { return [] }
+        return [Finding(level: .note, title: "What has worked",
+                        detail: "Unplug the cable at the MacBook. On the MacBook, open System Settings, then Network, use the ... menu to delete Thunderbolt Bridge, then add it again with the + button. Plug the cable back in and check again. If that does not help, do the same on the iMac, then restart both Macs, and only then try another Thunderbolt 4 cable (40 Gbps, 1 metre or shorter).")]
     }
 
     /// One line for the top of the report.

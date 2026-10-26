@@ -53,7 +53,7 @@ enum DiagnosticsRunner {
         let bridge = output(of: "/sbin/ifconfig", ["bridge0"], timeout: 5)
         var cable = Diagnostics.thunderbolt(thunderbolt) + Diagnostics.usb(usb) + Diagnostics.bridge(bridge)
         if let outcome = extra.outcome { cable = ConnectionProbe.reconcile(cable: cable, outcome: outcome) }
-        let findings = extra.findings + cable
+        let findings = extra.findings + cable + Diagnostics.advice(cable)
         return Diagnostics.report(findings, appVersion: appVersion, protocolVersion: protocolVersion)
     }
 }

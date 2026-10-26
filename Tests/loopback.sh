@@ -162,6 +162,17 @@ echo "$out" | grep -q "has paused connections" && pass "the check says the MacBo
 grep -q "Turned away" "$LOG/s9" && pass "the MacBook log says it turned the iMac away" || fail "no turned-away line in the MacBook log"
 stop_all
 
+# 5e. A connection check never replaces a live stream: only a client that sends a hello does that
+$S --port $PORT --any-interface 2> "$LOG/s10" &
+client 2> "$LOG/c10" &
+wait_for "$LOG/s10" "Streaming" 25 && pass "a client streams before the replacement check" || fail "no streaming before the replacement check"
+$C --port $PORT --check --any-interface > "$LOG/check10" 2>&1
+sleep 2
+grep -q "replacing the existing session" "$LOG/s10" && fail "a connection check replaced the live stream" || pass "a connection check does not replace the live stream"
+grep -q "Disconnected" "$LOG/c10" && fail "the live client was dropped by the check" || pass "the live client stayed connected through the check"
+grep -q "The MacBook answered" "$LOG/check10" && pass "the check still says the MacBook answered" || fail "the check no longer says the MacBook answered"
+stop_all
+
 # 5b. A client with a different version is told which Mac to update
 swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/Shared/Shared.swift Tests/probe/main.swift -o "$LOG/probe" 2>/dev/null
 $S --port $PORT --any-interface 2> "$LOG/s5" &

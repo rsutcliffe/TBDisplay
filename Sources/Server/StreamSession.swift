@@ -31,7 +31,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private let state: ServerState
     private let queue = DispatchQueue(label: "tbdisplay.session", qos: .userInteractive)
     var onClose: (() -> Void)?
-    var onAuthenticated: (() -> Void)?       // the TLS handshake with the pairing key succeeded
+    var onAuthenticated: (() -> Void)?       // the client has sent a good hello (the TLS handshake alone is not enough)
     var onHandshakeFailed: (() -> Void)?     // wrong key, no key, or not TLS at all
 
     // Pipeline state, only touched on `queue`
@@ -102,7 +102,13 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                 }
                 log("Client connected from \(self.connection.endpoint) via \(name ?? "unknown interface"), \(encryptionSummary(of: self.connection))")
                 self.handshakeDone = true
-                DispatchQueue.main.async { self.onAuthenticated?() }
+                // It counts as a client, and may replace the live one, only once it sends a hello. A connection check
+                // never does, so it cannot drop a stream. One that never says hello is closed.
+                self.queue.asyncAfter(deadline: .now() + 10) { [weak self] in
+                    guard let self, !self.started, !self.closed else { return }
+                    log("A client connected but never said hello within 10 seconds. Dropping it.")
+                    self.close()
+                }
                 receiveMessages(on: self.connection, maxMessage: 4096,   // the client sends tiny messages only
                                 onMessage: { [weak self] type, payload in self?.handle(type, payload) },
                                 onClose: { [weak self] error in
@@ -157,6 +163,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                     return
                 }
                 started = true
+                DispatchQueue.main.async { self.onAuthenticated?() }
                 self.hello = hello
                 log("iMac screen: \(hello.pixelWidth)x\(hello.pixelHeight) px at \(hello.scale)x, \(hello.refreshRate) Hz, TBDisplay \(hello.appVersion.isEmpty ? "(version not given)" : hello.appVersion)")
                 startPipeline(hello)

@@ -52,4 +52,12 @@ func runConnectionProbeTests() {
 
     let model = { () -> ClientModel in var m = ClientModel(); m.handle(.stalled); return m }()
     check(model.statusMessage.hasSuffix("Press Check connection to find out why."), "the long-wait advice points at Check connection")
+
+    // A client that was told Disconnect reconnects by itself, but only once the MacBook is really allowing connections
+    check(ConnectionProbe.canReconnect(.reachable), "ended: an answer with no notice means reconnect")
+    check(!ConnectionProbe.canReconnect(.notice(ConnectionGate.pausedNotice)), "ended: still paused means wait")
+    check(!ConnectionProbe.canReconnect(.notSeen) && !ConnectionProbe.canReconnect(.seenOnlyOther(["Wi-Fi"])) && !ConnectionProbe.canReconnect(.noAnswer) && !ConnectionProbe.canReconnect(.handshakeRefused), "ended: anything but a clean answer means wait")
+    check(!ConnectionProbe.canReconnect(nil), "ended: no outcome (no key) means wait")
+    var ended = ClientModel(); ended.handle(.endedByMacBook)
+    check(ended.statusMessage.contains("reconnects by itself") && ended.statusMessage.contains("press Reconnect"), "ended: the window says it reconnects by itself, or press Reconnect now")
 }

@@ -36,6 +36,10 @@ enum ConnectionProbe {
         }
     }
 
+    /// After Disconnect the client waits, and asks again every so often. Only an answer with nothing to say against it
+    /// (no pause notice, no refusal) means the MacBook is allowing connections again.
+    static func canReconnect(_ outcome: ProbeOutcome?) -> Bool { outcome == .reachable }
+
     /// When the MacBook answered, a cable complaint (another cable on USB 2, say) no longer matters: it becomes a note.
     static func reconcile(cable: [Finding], outcome: ProbeOutcome) -> [Finding] {
         guard outcome == .reachable else { return cable }

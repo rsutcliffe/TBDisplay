@@ -81,7 +81,7 @@ struct ClientModel {
         case .waitingForPicture: return "Connected. Waiting for the picture…"
         case .streaming: return ""
         case .lost: return "Connection lost. Reconnecting…"
-        case .ended: return "The MacBook ended the connection. Choose Allow connections in its menu bar, then press Reconnect."
+        case .ended: return "The MacBook ended the connection. Choose Allow connections in its menu bar item. This iMac reconnects by itself within about 30 seconds, or press Reconnect now."
         }
     }
 

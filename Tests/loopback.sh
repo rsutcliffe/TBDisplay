@@ -173,6 +173,29 @@ grep -q "Disconnected" "$LOG/c10" && fail "the live client was dropped by the ch
 grep -q "The MacBook answered" "$LOG/check10" && pass "the check still says the MacBook answered" || fail "the check no longer says the MacBook answered"
 stop_all
 
+# 5f. A client told Disconnect waits while the MacBook is paused, then reconnects by itself once it allows connections again
+export TBDISPLAY_ENDED_POLL_SECONDS=4
+$S --port $PORT --any-interface 2> "$LOG/s11" &
+client 2> "$LOG/c11" &
+wait_for "$LOG/s11" "Streaming" 25 && pass "a client streams before the auto reconnect check" || fail "no streaming before the auto reconnect check"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Disconnect" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/c11" "ended the connection" 10 && pass "the client is told the MacBook ended the connection" || fail "the client was not told the connection ended"
+sleep 9
+grep -q "allowing connections again" "$LOG/c11" && fail "the client reconnected while the MacBook was still paused" || pass "the client keeps waiting while the MacBook is paused"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Allow connections" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/c11" "allowing connections again" 25 && pass "the client notices the MacBook allows connections again" || fail "the client never noticed the MacBook allows connections again"
+wait_count "$LOG/s11" "iMac screen" 2 20 && pass "the client streams again without being restarted" || fail "the client did not stream again"
+unset TBDISPLAY_ENDED_POLL_SECONDS
+stop_all
+
 # 5b. A client with a different version is told which Mac to update
 swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/Shared/Shared.swift Tests/probe/main.swift -o "$LOG/probe" 2>/dev/null
 $S --port $PORT --any-interface 2> "$LOG/s5" &

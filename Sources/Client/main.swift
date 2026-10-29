@@ -191,6 +191,11 @@ final class Client {
     // State on `queue`
     private var model = ClientModel()
     private static let connectTimeout: TimeInterval = 8
+    // After Disconnect the client asks the MacBook every so often whether it is allowing connections again.
+    // TBDISPLAY_ENDED_POLL_SECONDS lets the tests shorten it.
+    private static let endedPollSeconds: TimeInterval = ProcessInfo.processInfo.environment["TBDISPLAY_ENDED_POLL_SECONDS"].flatMap(TimeInterval.init) ?? 30
+    private var endedPollStartedAt = Date()
+    private var endedPolling = false
     private var browseStartedAt = Date()     // when the current search for the MacBook began
     private var ended = false              // the MacBook said Disconnect: no retrying until the person presses Reconnect
     private var connection: NWConnection?
@@ -258,6 +263,23 @@ final class Client {
             }
             // A search that has found nothing for a while is started afresh: after a cable link returns, Bonjour can
             // stay silent about the Thunderbolt Bridge until the client is restarted.
+            if self.ended, !self.endedPolling, self.connection == nil,
+               BrowseRefresh.due(startedAt: self.endedPollStartedAt, now: Date(), interval: Client.endedPollSeconds) {
+                self.endedPolling = true
+                let policy = self.options.policy
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    let result = MacBookProbe.run(policy: policy)
+                    self?.queue.async {
+                        guard let self else { return }
+                        self.endedPolling = false
+                        self.endedPollStartedAt = Date()
+                        if self.ended, ConnectionProbe.canReconnect(result.outcome) {
+                            log("The MacBook is allowing connections again. Reconnecting.")
+                            self.reconnect()
+                        }
+                    }
+                }
+            }
             if self.connection == nil, self.browser != nil, !self.ended,
                BrowseRefresh.due(startedAt: self.browseStartedAt, now: Date()) {
                 self.browse()
@@ -467,8 +489,9 @@ final class Client {
             log("The MacBook says: \(text)")
             event(.refused(text))
         case .ended:
-            log("The MacBook ended the connection. Not reconnecting until asked.")
+            log("The MacBook ended the connection. Asking every \(Int(Client.endedPollSeconds)) seconds whether it allows connections again.")
             ended = true
+            endedPollStartedAt = Date()
             event(.endedByMacBook)
         case .heartbeat:
             markServerData()

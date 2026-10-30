@@ -86,4 +86,7 @@ struct ClientModel {
     }
 
     var presentation: ClientPresentation { phase == .streaming ? .fullScreen : .setupWindow }
+
+    /// The iMac is held awake only while a picture is streaming, so it sleeps by itself when nothing is shown.
+    var keepsDisplayAwake: Bool { phase == .streaming }
 }

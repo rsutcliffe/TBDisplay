@@ -653,7 +653,9 @@ let setupWindow: SetupWindow? = options.windowed ? nil : SetupWindow()
 UpdateController.shared.checkAtLaunchIfDue()
 setupWindow?.onQuit = videoView.onQuit
 var cursorHidden = false
+let displayAwake = DisplayAwake()      // held only while a picture is streaming
 func present(_ model: ClientModel) {
+    displayAwake.set(model.keepsDisplayAwake)
     guard let setupWindow else {
         videoView.setStatus(model.statusMessage.isEmpty ? nil : model.statusMessage)
         return
@@ -693,12 +695,7 @@ let checklistWindow = ChecklistWindow(role: .client) { action in
 present(ClientModel())
 if setupWindow != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { checklistWindow.showIfNeeded() } }
 
-// Keep the iMac screen awake while it is acting as a display.
-var sleepAssertion: IOPMAssertionID = 0
-IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
-                            IOPMAssertionLevel(kIOPMAssertionLevelOn),
-                            "tbdisplay is showing the MacBook display" as CFString,
-                            &sleepAssertion)
+PowerLog.start()
 
 // A minimal menu so Cmd-Q works.
 let mainMenu = NSMenu()

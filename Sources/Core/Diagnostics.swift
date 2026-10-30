@@ -73,7 +73,7 @@ enum Diagnostics {
         let linkProblems: Set<String> = ["No Thunderbolt device on any port", "The other Mac is connected over USB 2 only", "Thunderbolt Bridge is not active"]
         guard findings.contains(where: { $0.level == .problem && linkProblems.contains($0.title) }) else { return [] }
         return [Finding(level: .note, title: "What has worked",
-                        detail: "Unplug the cable at the MacBook. On the MacBook, open System Settings, then Network, use the ... menu to delete Thunderbolt Bridge, then add it again with the + button. Plug the cable back in and check again. If that does not help, do the same on the iMac, then restart both Macs, and only then try another Thunderbolt 4 cable (40 Gbps, 1 metre or shorter).")]
+                        detail: "Unplug the cable at the MacBook. On the MacBook, open System Settings, then Network, use the ... menu to delete Thunderbolt Bridge, then add it again from the same ... menu. Plug the cable back in and check again. If that does not help, do the same on the iMac, then restart both Macs, and only then try another Thunderbolt 4 cable (40 Gbps, 1 metre or shorter).")]
     }
 
     /// One line for the top of the report.

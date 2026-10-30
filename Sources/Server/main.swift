@@ -207,6 +207,7 @@ app.setActivationPolicy(.accessory)
 
 let serverState = ServerState()
 let server = Server(options: options, key: pairingKey, state: serverState)
+PowerLog.start()
 let statusController = StatusController(state: serverState, server: server)
 UpdateController.shared.checkAtLaunchIfDue()
 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { statusController.showChecklistIfNeeded() }   // once the app has finished starting

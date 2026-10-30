@@ -10,6 +10,12 @@ AirPlay to Mac was the built-in way round it. It worked, but the picture was poo
 
 So I wrote two small macOS apps. The server runs on the MacBook, creates a virtual display and streams it as hardware HEVC. The client runs on the iMac and shows the stream full screen. It solves one small problem for one pair of machines. I am sharing it in case it helps someone with the same problem.
 
+## How it looks on the MacBook
+
+The iMac appears in System Settings, Displays, as "iMac via Thunderbolt". It is an extended display with the full 4480 x 2520 panel available and 2240 x 1260 as the default.
+
+<img src="docs/displays-settings.png" alt="macOS System Settings on the MacBook, Displays pane, showing iMac via Thunderbolt as an extended display set to 2240 x 1260 (Default)" width="420">
+
 ## What it does
 
 - Streams at the iMac's full native resolution (4480 x 2520 on the 24-inch iMac), shown as a 2240 x 1260 Retina desktop.

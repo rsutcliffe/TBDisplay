@@ -20,6 +20,7 @@ The iMac appears in System Settings, Displays, as "iMac via Thunderbolt". It is 
 
 - Streams at the iMac's full native resolution (4480 x 2520 on the 24-inch iMac), shown as a 2240 x 1260 Retina desktop.
 - Keeps the picture steady over long sessions: at most two frames are in flight, and a newer frame replaces a waiting one, so delay does not build up.
+- Draws the pointer on the iMac itself. The MacBook sends where the pointer is and what it looks like as two small messages, so the pointer moves without waiting for a video frame.
 - Encrypts the link (TLS 1.2, ECDHE-PSK with ChaCha20-Poly1305) with a pairing key shared by the two Macs.
 - Pairs without copying files: the MacBook and the iMac each show a six-digit code, and you confirm they match.
 - Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you choose another way in **Connect over**: Wi-Fi or Ethernet (a wired adapter, which includes a USB network link between the Macs). Set the same choice on both Macs. If they differ, the iMac window says which one the MacBook accepts.

@@ -61,6 +61,11 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private var statEncodeMs = 0.0, statSendMs = 0.0, statTimed = 0
     private var winSendMs = 0.0, winFrames = 0, winBytes = 0
     private var lastStatsIdle = false
+    private var cursorTracker = CursorTracker()
+    private var cursorTimer: DispatchSourceTimer?
+    private var cursorShapeTimer: DispatchSourceTimer?     // runs on the main thread, where NSCursor is read
+    private var cursorSendsPending = 0                     // pointer messages handed to the network and not yet sent
+    private var lastCursorShape: CursorShape?              // main thread only
 
     // Main-thread state
     private var display: VirtualDisplay?
@@ -342,7 +347,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         config.colorSpaceName = CGColorSpace.sRGB
         config.queueDepth = 5
-        config.showsCursor = true
+        config.showsCursor = false     // the pointer travels as its own small messages (see startCursor)
         config.scalesToFit = false
 
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
@@ -456,6 +461,53 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         stats.setEventHandler { [weak self] in self?.logStats() }
         stats.resume()
         statsTimer = stats
+        startCursor()
+    }
+
+    // MARK: Pointer (on queue, shape on main)
+
+    /// The pointer is drawn by the iMac. Its place is sent up to 120 times a second, only when it moved, and its
+    /// look is sent when it changes. If the network is behind, positions are skipped instead of queued.
+    private func startCursor() {
+        let position = DispatchSource.makeTimerSource(queue: queue)
+        position.schedule(deadline: .now(), repeating: .milliseconds(8))
+        position.setEventHandler { [weak self] in
+            guard let self, !self.closed else { return }
+            let point = CGEvent(source: nil)?.location ?? .zero
+            guard let message = self.cursorTracker.update(point: point, bounds: CGDisplayBounds(self.virtualDisplayID)) else { return }
+            guard self.cursorSendsPending < 50 else { self.cursorTracker.reset(); return }   // sent again once it drains
+            self.sendCursor(.cursorPosition, message.encode())
+        }
+        position.resume()
+        cursorTimer = position
+
+        let shape = DispatchSource.makeTimerSource(queue: .main)
+        shape.schedule(deadline: .now(), repeating: .milliseconds(50))
+        shape.setEventHandler { [weak self] in
+            guard let self, !self.mainClosed, let next = StreamSession.currentCursorShape(), next != self.lastCursorShape else { return }
+            self.lastCursorShape = next
+            self.queue.async { if !self.closed { self.sendCursor(.cursorShape, next.encode()) } }
+        }
+        shape.resume()
+        cursorShapeTimer = shape
+    }
+
+    private func sendCursor(_ type: MessageType, _ payload: Data) {
+        cursorSendsPending += 1
+        connection.send(content: frameMessage(type, payload), completion: .contentProcessed { [weak self] _ in
+            self?.queue.async { self?.cursorSendsPending -= 1 }
+        })
+    }
+
+    /// The system pointer as a PNG. Falls back to the arrow when macOS gives none, so the pointer always shows.
+    private static func currentCursorShape() -> CursorShape? {
+        let cursor = NSCursor.currentSystem ?? NSCursor.arrow
+        let image = cursor.image
+        guard image.size.width > 0, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { return nil }
+        let scale = UInt8(max(1, min(3, (Double(cg.width) / image.size.width).rounded())))
+        return CursorShape(hotspotX: UInt32(max(0, cursor.hotSpot.x * 100)), hotspotY: UInt32(max(0, cursor.hotSpot.y * 100)),
+                           scale: scale, png: png)
     }
 
     private func everySecond() {
@@ -521,6 +573,11 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         secondTimer = nil
         statsTimer?.cancel()
         statsTimer = nil
+        cursorTimer?.cancel()
+        cursorTimer = nil
+        let shapeTimer = cursorShapeTimer
+        cursorShapeTimer = nil
+        DispatchQueue.main.async { shapeTimer?.cancel() }
         parked = nil
         let stream = self.stream
         self.stream = nil

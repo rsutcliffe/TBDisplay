@@ -73,6 +73,7 @@ grep -q "look like" "$LOG/s1" && pass "HiDPI mode selected" || fail "no HiDPI mo
 [ "$(stat -f %Lp "$LOG/logs/server.log" 2>/dev/null)" = "600" ] && pass "the log file is owner-only (0600)" || fail "the log file permissions are loose"
 sleep 7
 grep -q "No data from the MacBook" "$LOG/c0" && fail "client lost the heartbeat" || pass "client kept receiving heartbeats for 7 s"
+grep -q "pointer shape received" "$LOG/logs/client.log" && pass "the iMac received the pointer shape as its own message" || fail "no pointer shape reached the client"
 pkill -TERM -f "$C"; sleep 2
 [ -f "$LOG/layout.json" ] && grep -q "Saved display position" "$LOG/s1" && pass "display position saved on disconnect" || fail "display position not saved"
 echo '{"dx":-700,"dy":-1500}' > "$LOG/layout.json"

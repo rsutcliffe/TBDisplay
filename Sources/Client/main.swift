@@ -68,6 +68,8 @@ final class KeyableWindow: NSWindow {
 
 final class VideoView: NSView {
     let displayLayer = AVSampleBufferDisplayLayer()
+    private let cursorLayer = CALayer()      // the MacBook's pointer, drawn here so it never waits for a video frame
+    private var cursorPosition: CursorPosition?
     private let statusLabel = NSTextField(labelWithString: "")
     var onQuit: (() -> Void)?
     var onInput: ((InputEvent) -> Void)?   // set only when --input is on
@@ -79,6 +81,8 @@ final class VideoView: NSView {
         displayLayer.videoGravity = .resizeAspect
         displayLayer.backgroundColor = NSColor.black.cgColor
         layer?.addSublayer(displayLayer)
+        cursorLayer.isHidden = true
+        layer?.addSublayer(cursorLayer)
 
         statusLabel.textColor = NSColor(white: 0.6, alpha: 1)
         statusLabel.font = .systemFont(ofSize: 22, weight: .medium)
@@ -102,6 +106,43 @@ final class VideoView: NSView {
         CATransaction.setDisableActions(true)
         displayLayer.frame = bounds
         displayLayer.contentsScale = window?.backingScaleFactor ?? 2
+        CATransaction.commit()
+        placeCursor()
+    }
+
+    // MARK: Pointer from the MacBook (main thread)
+
+    func setCursorShape(_ shape: CursorShape) {
+        guard let image = NSImage(data: shape.png), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let scale = CGFloat(shape.scale)
+        let size = CGSize(width: CGFloat(cg.width) / scale, height: CGFloat(cg.height) / scale)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        cursorLayer.contents = cg
+        cursorLayer.contentsScale = scale
+        cursorLayer.bounds = CGRect(origin: .zero, size: size)
+        // The hotspot is measured from the top left of the image, and layer anchors from the bottom left.
+        cursorLayer.anchorPoint = CGPoint(x: CGFloat(shape.hotspotX) / 100 / size.width,
+                                          y: 1 - CGFloat(shape.hotspotY) / 100 / size.height)
+        CATransaction.commit()
+        placeCursor()
+    }
+
+    func setCursorPosition(_ position: CursorPosition?) {
+        cursorPosition = position
+        placeCursor()
+    }
+
+    private func placeCursor() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let p = cursorPosition, p.visible, cursorLayer.contents != nil {
+            cursorLayer.position = CGPoint(x: CGFloat(p.x) / 1_000_000 * bounds.width,
+                                           y: bounds.height - CGFloat(p.y) / 1_000_000 * bounds.height)
+            cursorLayer.isHidden = false
+        } else {
+            cursorLayer.isHidden = true
+        }
         CATransaction.commit()
     }
 
@@ -210,6 +251,7 @@ final class Client {
     private var stallReported = false
     private var shownPicture = false
     private var mouseCaptured = false
+    private var cursorLogged = false       // the first pointer message of a connection is logged once
     private var watchdog: DispatchSourceTimer?
     private var statFrames = 0
     private var statBytes = 0
@@ -438,6 +480,8 @@ final class Client {
         format = nil
         awaitingKeyframe = true
         renderer.flush(removingDisplayedImage: true) { }
+        DispatchQueue.main.async { self.view.setCursorPosition(nil) }
+        cursorLogged = false
         event(lost ? .lost : .closed(hadData: gotServerData))
         captureMouse(false)
         if gotServerData { lastProgress = Date(); stallReported = false }      // a link that was working starts a fresh wait
@@ -495,6 +539,12 @@ final class Client {
             event(.endedByMacBook)
         case .heartbeat:
             markServerData()
+        case .cursorPosition:
+            markServerData()
+            if let position = try? CursorPosition.decode(payload) { DispatchQueue.main.async { self.view.setCursorPosition(position) } }
+        case .cursorShape:
+            if !cursorLogged { cursorLogged = true; log("The MacBook draws the pointer on this screen (pointer shape received).") }
+            if let shape = try? CursorShape.decode(payload) { DispatchQueue.main.async { self.view.setCursorShape(shape) } }
         case .videoConfig:
             do {
                 let config = try VideoConfig.decode(payload)

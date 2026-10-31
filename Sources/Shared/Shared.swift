@@ -12,8 +12,8 @@ import Security
 
 let serviceType = "_tbdisplay._tcp"
 let defaultPort: UInt16 = 47800
-let protocolVersion: UInt32 = 5
-let appVersion = "1.10.3"      // shown in the windows and menus, so mismatched copies are easy to spot
+let protocolVersion: UInt32 = 6
+let appVersion = "1.11.0"      // shown in the windows and menus, so mismatched copies are easy to spot
 let maxMessageSize = 64 * 1024 * 1024
 let defaultInterfaceName = "bridge0" // Thunderbolt Bridge on macOS
 
@@ -31,6 +31,8 @@ enum MessageType: UInt8 {
     case pairReject = 12     // pairing, MacBook -> iMac: the person said the codes did not match
     case notice = 13         // server -> client: a sentence for the person, sent before the server closes
     case ended = 14          // server -> client: the person chose Disconnect, so the client must not reconnect by itself
+    case cursorPosition = 15 // server -> client: where the pointer is, drawn by the client above the video
+    case cursorShape = 16    // server -> client: what the pointer looks like (PNG), sent when it changes
 }
 
 struct Hello {

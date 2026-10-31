@@ -17,7 +17,7 @@ let package = Package(
             dependencies: ["TBCore"],
             path: "Tests",
             exclude: ["main.swift", "probe", "fixtures", "all.sh", "checklist_ui.sh", "client_window.sh", "connection_check_ui.sh", "input_gate.sh", "loopback.sh", "pairing_ui.sh", "release_script_test.sh"],
-            sources: ["ChecklistTests.swift", "ClientModelTests.swift", "DiagnosticsRunnerTests.swift", "LinkWatchTests.swift", "DiagnosticsTests.swift", "LogFileTests.swift", "BrowseRefreshTests.swift", "ConnectionGateTests.swift", "ConnectionProbeTests.swift", "ConnectionModeTests.swift", "LoginItemTests.swift", "PairingFlowModelTests.swift", "PairingNetworkTests.swift", "PairingProtocolTests.swift", "PairingSupportTests.swift", "RetroTests.swift", "SharedTests.swift", "UpdateCheckTests.swift", "TestSupport.swift", "VersionTests.swift"] + ["XCTests"]
+            sources: ["ChecklistTests.swift", "ClientModelTests.swift", "DiagnosticsRunnerTests.swift", "LinkWatchTests.swift", "DiagnosticsTests.swift", "LogFileTests.swift", "BrowseRefreshTests.swift", "ConnectionGateTests.swift", "CursorWireTests.swift", "ConnectionProbeTests.swift", "ConnectionModeTests.swift", "LoginItemTests.swift", "PairingFlowModelTests.swift", "PairingNetworkTests.swift", "PairingProtocolTests.swift", "PairingSupportTests.swift", "RetroTests.swift", "SharedTests.swift", "UpdateCheckTests.swift", "TestSupport.swift", "VersionTests.swift"] + ["XCTests"]
         ),
     ]
 )

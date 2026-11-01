@@ -441,6 +441,9 @@ enum Prefs {
     static let updateCheckDisabled = "tbdisplay.updateCheckDisabled"   // the person turned automatic update checks off
     static let lastUpdateCheck = "tbdisplay.lastUpdateCheck"           // when the last successful check finished
     static let connectionMode = "tbdisplay.connectionMode"             // Thunderbolt, Wi-Fi or Ethernet
+    static let wakeMAC = "tbdisplay.wakeMAC"                           // the iMac's Mac address, learned when it connects
+    static let wakeInterface = "tbdisplay.wakeInterface"               // the interface it connected over (for example en5)
+    static let wakeAutomatically = "tbdisplay.wakeAutomatically"       // wake the iMac when this MacBook starts or wakes (on unless false)
 }
 
 // MARK: - Logging and arguments

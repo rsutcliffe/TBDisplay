@@ -95,6 +95,11 @@ final class StatusController: NSObject, NSMenuDelegate {
         }
         modeItem.submenu = modeMenu
         menu.addItem(modeItem)
+        let wake = WakeSender.shared
+        action("Wake iMac", #selector(wakeIMac), enabled: wake.savedMAC != nil && !stats.connected)
+        if wake.savedMAC == nil { line("Connect the iMac once, then it can be woken from here") }
+        else if let result = wake.lastResult { line(result) }
+        action("Wake iMac automatically", #selector(toggleAutoWake), checked: wake.automatic)
         menu.addItem(.separator())
         action("Pair a new Mac…", #selector(pairNewMac))
         action("Check connection…", #selector(checkConnection))
@@ -133,6 +138,10 @@ final class StatusController: NSObject, NSMenuDelegate {
     @objc private func chooseMode(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String, let mode = ConnectionMode(rawValue: raw) { server.setMode(mode) }
     }
+
+    @objc private func wakeIMac() { WakeSender.shared.wake(reason: "chosen from the menu") }
+
+    @objc private func toggleAutoWake() { WakeSender.shared.automatic.toggle() }
 
     @objc private func checkForUpdates() { UpdateController.shared.checkNow() }
 

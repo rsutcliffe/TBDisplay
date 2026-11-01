@@ -25,6 +25,7 @@ The iMac appears in System Settings, Displays, as "iMac via Thunderbolt". It is 
 - Pairs without copying files: the MacBook and the iMac each show a six-digit code, and you confirm they match.
 - Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you choose another way in **Connect over**: Wi-Fi or Ethernet (a wired adapter, which includes a USB network link between the Macs). Set the same choice on both Macs. If they differ, the iMac window says which one the MacBook accepts.
 - Optionally forwards the iMac's keyboard and mouse to the MacBook (switched on from the server's menu bar item).
+- Wakes a sleeping iMac from the MacBook (see below).
 - Leaves sound alone. Audio stays on the MacBook.
 
 ## Measured results (one pair of machines)
@@ -53,12 +54,19 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 
 `Package.swift` exposes the shared code and the unit tests, so you can open the folder in Xcode. The two apps themselves are built by `build.sh`. `Resources/make-icon.sh` regenerates the app icon.
 
+## Waking the iMac
+
+A sleeping iMac runs no TBDisplay, so the MacBook wakes it. Once an iMac has connected, the MacBook saves its Mac address and the interface it used. Choose **Wake iMac** in the MacBook's menu bar item, or leave **Wake iMac automatically** ticked and it is sent when TBDisplay starts and when the MacBook wakes (unless the iMac is already connected). The server log says what was sent and whether the iMac connected within 60 seconds.
+
+- Switch on **Wake for network access** on the iMac (System Settings, Battery or Energy).
+- The wake is a Wake-on-LAN magic packet. Whether a sleeping Mac accepts it over a given connection depends on the Mac and macOS, and I have not measured it for the Thunderbolt Bridge. If it does not work over Thunderbolt, try Ethernet or Wi-Fi in **Connect over**.
+
 ## Where things are kept
 
 - Pairing key: `~/Library/Application Support/tbdisplay/pairing-key`, owner-only. A key replaced by pairing is kept beside it as `pairing-key.previous`.
 - Saved position of the virtual display: `~/Library/Application Support/tbdisplay/layout.json`.
 - Logs: `~/Library/Logs/TBDisplay/server.log` and `client.log`, owner-only, up to 1 MB each with one older copy. "Show log" in the server menu and in the client window opens the folder.
-- Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
+- Preferences (first-run flag, whether an iMac has ever connected, the iMac's Mac address for waking it): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
 - "Open at login" is a checkbox in each app. It only works when the app runs from the Applications folder, not from Downloads or straight from the disk image, so move it there and reopen it. macOS may then ask you to allow it in System Settings.
 
 ## If it will not connect

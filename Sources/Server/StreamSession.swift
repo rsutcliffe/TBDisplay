@@ -22,6 +22,8 @@ struct ServerOptions {
     var policy: InterfacePolicy = .mode(ConnectionMode.saved())     // the menu changes it while the app runs
     var pausedNotice: String?          // set while Disconnect has paused this MacBook: the iMac is told, then closed
     var hiDPI = true
+    var recordDirectory: URL?          // set by --record: a copy of the encoded stream is saved here for diagnosis
+    var recordSeconds = 30.0
 }
 
 // All state is touched on `queue` only, so crossing threads through it is safe. The compiler cannot see that.
@@ -40,6 +42,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private var encoder: HEVCEncoder?
     private var stream: SCStream?
     private var inFlight = 0
+    private var recorder: StreamRecorder?       // nil unless --record was given
     private var ageStats = LatencyStats()      // capture to the start of encoding: delivery plus any wait while parked
     private var totalStats = LatencyStats()    // capture to the last byte handed to the network
     private var parked: (CVPixelBuffer, CMTime)?
@@ -76,6 +79,12 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         self.options = options
         self.state = state
         self.controller = BitrateController(cap: options.bitrate)
+        if let directory = options.recordDirectory {
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            let folder = directory.appendingPathComponent(stamp)
+            recorder = StreamRecorder(directory: folder, maxSeconds: options.recordSeconds)
+            log("Recording the encoded stream to \(folder.path) for \(Int(options.recordSeconds)) seconds. The files show your screen and are readable by you only.")
+        }
     }
 
     func start() {
@@ -422,6 +431,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                     if error == nil {
                         let sendMs = Double(DispatchTime.now().uptimeNanoseconds - sendStart.uptimeNanoseconds) / 1e6
                         self.totalStats.add(sinceCaptureMs())
+                        self.recordIfWanted(frame)
                         self.statFrames += 1; self.statBytes += size
                         self.statEncodeMs += encodeMs; self.statSendMs += sendMs; self.statTimed += 1
                         self.secFrames += 1; self.secEncodeMs += encodeMs; self.secSendMs += sendMs; self.secTimed += 1
@@ -432,6 +442,13 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                 }
             })
         }
+    }
+
+    /// Saves the frame just sent, if recording was asked for, and says when the time is up.
+    private func recordIfWanted(_ frame: EncodedFrame) {
+        guard let recorder, recorder.isActive else { return }
+        recorder.record(frame: frame.data, isKeyframe: frame.isKeyframe, ptsMicros: frame.ptsMicros, config: frame.config)
+        if !recorder.isActive { log("Recording finished.") }
     }
 
     private func frameFinished() {

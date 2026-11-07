@@ -17,6 +17,9 @@ Usage: tbdisplay-server [options]
   --interface NAME    Only accept clients on this interface (default: the Connect over choice in the menu bar item, Thunderbolt at first)
   --any-interface     Accept clients on any interface, including Wi-Fi (not recommended)
   --no-hidpi          Run the iMac at native pixels instead of Retina scaling
+  --record DIR        Save a copy of the encoded stream (HEVC, openable in ffmpeg) under DIR, for diagnosing picture faults.
+                      The files show your screen. They are owner-only, and recording stops after --record-seconds.
+  --record-seconds N  How long to record (default 30)
   --help              Show this help
 
 Pairing: the first run creates a random pairing key (see the log for its place). Copy that file to the same
@@ -42,6 +45,8 @@ if let name = args.string("interface") { options.policy = .named(name) }
 if args.flag("any-interface") { options.policy = .any }
 if args.flag("no-hidpi") { options.hiDPI = false }
 if args.flag("no-adapt") { options.adaptBitrate = false }
+if let dir = args.string("record") { options.recordDirectory = URL(fileURLWithPath: (dir as NSString).expandingTildeInPath) }
+if let seconds = args.int("record-seconds") { options.recordSeconds = Double(min(max(seconds, 1), 600)) }
 
 final class Server {
     private var options: ServerOptions

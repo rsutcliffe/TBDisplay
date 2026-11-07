@@ -26,6 +26,7 @@ final class SuiteTests: XCTestCase {
     func testConnectionProbe() { run("ConnectionProbe", runConnectionProbeTests) }
     func testConnectionMode() { run("ConnectionMode", runConnectionModeTests) }
     func testLoginItem() { run("LoginItem", runLoginItemTests) }
+    func testStreamRecorder() { run("StreamRecorder", runStreamRecorderTests) }
     func testUpdateCheck() { run("UpdateCheck", runUpdateCheckTests) }
     func testVersion() { run("Version", runVersionTests) }
     func testDiagnostics() { run("Diagnostics", runDiagnosticsTests) }

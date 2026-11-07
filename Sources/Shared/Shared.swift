@@ -13,7 +13,7 @@ import Security
 let serviceType = "_tbdisplay._tcp"
 let defaultPort: UInt16 = 47800
 let protocolVersion: UInt32 = 6
-let appVersion = "1.11.0"      // shown in the windows and menus, so mismatched copies are easy to spot
+let appVersion = "1.12.0"      // shown in the windows and menus, so mismatched copies are easy to spot
 let maxMessageSize = 64 * 1024 * 1024
 let defaultInterfaceName = "bridge0" // Thunderbolt Bridge on macOS
 
@@ -441,6 +441,9 @@ enum Prefs {
     static let updateCheckDisabled = "tbdisplay.updateCheckDisabled"   // the person turned automatic update checks off
     static let lastUpdateCheck = "tbdisplay.lastUpdateCheck"           // when the last successful check finished
     static let connectionMode = "tbdisplay.connectionMode"             // Thunderbolt, Wi-Fi or Ethernet
+    static let wakeMAC = "tbdisplay.wakeMAC"                           // the iMac's Mac address, learned when it connects
+    static let wakeInterface = "tbdisplay.wakeInterface"               // the interface it connected over (for example en5)
+    static let wakeAutomatically = "tbdisplay.wakeAutomatically"       // wake the iMac when this MacBook starts or wakes (on unless false)
 }
 
 // MARK: - Logging and arguments

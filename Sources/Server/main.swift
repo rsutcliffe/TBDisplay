@@ -118,6 +118,7 @@ final class Server {
                     self.pending.removeAll { $0 === session }
                     self.tracker.recordSuccess(address)
                     Prefs.defaults.set(true, forKey: Prefs.everConnected)
+                    WakeSender.shared.learn(address: address, interface: interfaceName(of: connection))
                     // One iMac at a time. A client that has proved it holds the key replaces the old one.
                     if let old = self.session, old !== session {
                         log("New client replacing the existing session")
@@ -213,6 +214,8 @@ app.setActivationPolicy(.accessory)
 let serverState = ServerState()
 let server = Server(options: options, key: pairingKey, state: serverState)
 PowerLog.start()
+WakeSender.shared.state = serverState
+WakeSender.shared.start()
 let statusController = StatusController(state: serverState, server: server)
 UpdateController.shared.checkAtLaunchIfDue()
 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { statusController.showChecklistIfNeeded() }   // once the app has finished starting

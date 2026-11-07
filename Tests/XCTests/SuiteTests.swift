@@ -33,4 +33,5 @@ final class SuiteTests: XCTestCase {
     func testDiagnosticsRunner() { run("DiagnosticsRunner", runDiagnosticsRunnerTests) }
     func testChecklist() { run("Checklist", runChecklistTests) }
     func testRetro() { run("Retro", runRetroTests) }
+    func testWakeOnLan() { run("WakeOnLan", runWakeOnLanTests) }
 }

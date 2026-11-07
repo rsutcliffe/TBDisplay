@@ -14,7 +14,7 @@ Usage: tbdisplay-server [options]
   --no-adapt          Keep the bitrate fixed
   --fps N             Frame rate cap (default 60)
   --max-in-flight N   Frames allowed in the encoder or socket at once (default 2)
-  --interface NAME    Only accept clients on this interface (default \(defaultInterfaceName))
+  --interface NAME    Only accept clients on this interface (default: the Connect over choice in the menu bar item, Thunderbolt at first)
   --any-interface     Accept clients on any interface, including Wi-Fi (not recommended)
   --no-hidpi          Run the iMac at native pixels instead of Retina scaling
   --record DIR        Save a copy of the encoded stream (HEVC, openable in ffmpeg) under DIR, for diagnosing picture faults.
@@ -41,15 +41,15 @@ if let port = args.int("port") { options.port = UInt16(clamping: port) }
 if let mbps = args.int("bitrate") { options.bitrate = max(5, mbps) * 1_000_000 }
 if let fps = args.int("fps") { options.fps = min(max(fps, 10), 120) }
 if let n = args.int("max-in-flight") { options.maxInFlight = min(max(n, 1), 8) }
-if let name = args.string("interface") { options.allowedInterfaces = [name] }
-if args.flag("any-interface") { options.allowedInterfaces = nil }
+if let name = args.string("interface") { options.policy = .named(name) }
+if args.flag("any-interface") { options.policy = .any }
 if args.flag("no-hidpi") { options.hiDPI = false }
 if args.flag("no-adapt") { options.adaptBitrate = false }
 if let dir = args.string("record") { options.recordDirectory = URL(fileURLWithPath: (dir as NSString).expandingTildeInPath) }
 if let seconds = args.int("record-seconds") { options.recordSeconds = Double(min(max(seconds, 1), 600)) }
 
 final class Server {
-    private let options: ServerOptions
+    private var options: ServerOptions
     let state: ServerState
     private let tracker = FailureTracker()
     private var key: Data
@@ -57,6 +57,7 @@ final class Server {
     private var listener: NWListener?
     private var session: StreamSession?
     private var pendingLogged = false
+    private(set) var gate = ConnectionGate()
     private var pending: [StreamSession] = []      // shaking hands, kept alive until they finish or fail
     private let queue = DispatchQueue(label: "tbdisplay.listener")
 
@@ -79,8 +80,7 @@ final class Server {
             guard let self else { return }
             switch state {
             case .ready:
-                let scope = self.options.allowedInterfaces.map { "on \($0.sorted().joined(separator: ", "))" } ?? "on any interface"
-                log("Listening on port \(self.options.port) \(scope). Start tbdisplay-client on the iMac.")
+                log("Listening on port \(self.options.port), accepting connections \(self.options.policy.summary). Start tbdisplay-client on the iMac.")
             case .failed(let error):
                 log("Listener failed: \(error)")
                 exit(1)
@@ -103,7 +103,9 @@ final class Server {
                     return
                 }
                 self.pendingLogged = false
-                let session = StreamSession(connection: connection, options: self.options, state: self.state)
+                var sessionOptions = self.options
+                if !self.gate.accepts { sessionOptions.pausedNotice = ConnectionGate.pausedNotice }
+                let session = StreamSession(connection: connection, options: sessionOptions, state: self.state)
                 self.pending.append(session)
                 session.onHandshakeFailed = { [weak self] in
                     guard let self else { return }
@@ -143,7 +145,29 @@ final class Server {
         try? start()
     }
 
-    func disconnect() { session?.stop() }
+    /// Drops the iMac and refuses it until `resume`, because the client would reconnect within a second.
+    func disconnect() {
+        gate.pause()
+        pending.forEach { $0.stop() }
+        pending = []
+        session?.end()
+        log("Disconnected from the menu. New connections are refused until you choose Allow connections.")
+    }
+
+    func resume() { gate.resume(); log("Connections allowed again.") }
+
+    var policy: InterfacePolicy { options.policy }
+
+    /// The person chose how the iMac reaches this Mac. It is saved, applies to the next connection, and the current
+    /// one ends so the iMac meets the new rule (and is told what it is) instead of carrying on the old way.
+    func setMode(_ mode: ConnectionMode) {
+        mode.save()
+        options.policy = .mode(mode)
+        log("Connect over: \(mode.title). Connections are accepted \(options.policy.summary).")
+        pending.forEach { $0.stop() }
+        pending = []
+        session?.end()
+    }
 
     /// Stops everything. `then` runs once the virtual display has really been removed (or after 4 seconds),
     /// because exiting first can leave macOS holding the display for minutes.
@@ -188,7 +212,9 @@ app.setActivationPolicy(.accessory)
 
 let serverState = ServerState()
 let server = Server(options: options, key: pairingKey, state: serverState)
+PowerLog.start()
 let statusController = StatusController(state: serverState, server: server)
+UpdateController.shared.checkAtLaunchIfDue()
 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { statusController.showChecklistIfNeeded() }   // once the app has finished starting
 do {
     try server.start()

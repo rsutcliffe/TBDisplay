@@ -37,13 +37,27 @@ final class ReportWindow: NSObject, NSWindowDelegate {
         stack.orientation = .vertical
         stack.alignment = .trailing
         stack.spacing = 12
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        // A stack view used directly as the window's content ignored its right-hand margin, which left the Close button
+        // touching the window edge. The margins are explicit constraints on a container instead.
+        let container = NSView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 400).isActive = true
-        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
-        panel.contentView = stack
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+            scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            scroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 400),
+            scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 240),
+        ])
+        panel.contentView = container
         panel.center()
     }
+
+    /// What the app adds to the cable report, worked out away from the main thread (the client really tries to connect).
+    var extra: (() -> (findings: [Finding], outcome: ProbeOutcome?))?
 
     func show() {
         runCheck()
@@ -52,10 +66,10 @@ final class ReportWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func runCheck() {
-        textView.string = "Checking…\n\nThis takes a few seconds."
+        textView.string = "Checking…\n\nThis takes up to 20 seconds."
         again.isEnabled = false
         DispatchQueue.global(qos: .userInitiated).async {
-            let report = DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion)
+            let report = DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion, extra: self.extra?() ?? ([], nil))
             DispatchQueue.main.async {
                 self.textView.string = report
                 self.again.isEnabled = true

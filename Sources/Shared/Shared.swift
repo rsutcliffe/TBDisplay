@@ -12,8 +12,8 @@ import Security
 
 let serviceType = "_tbdisplay._tcp"
 let defaultPort: UInt16 = 47800
-let protocolVersion: UInt32 = 5
-let appVersion = "1.7.0"      // shown in the windows and menus, so mismatched copies are easy to spot
+let protocolVersion: UInt32 = 6
+let appVersion = "1.11.0"      // shown in the windows and menus, so mismatched copies are easy to spot
 let maxMessageSize = 64 * 1024 * 1024
 let defaultInterfaceName = "bridge0" // Thunderbolt Bridge on macOS
 
@@ -30,6 +30,9 @@ enum MessageType: UInt8 {
     case pairSealed = 11     // pairing, MacBook -> iMac: the pairing key, sealed
     case pairReject = 12     // pairing, MacBook -> iMac: the person said the codes did not match
     case notice = 13         // server -> client: a sentence for the person, sent before the server closes
+    case ended = 14          // server -> client: the person chose Disconnect, so the client must not reconnect by itself
+    case cursorPosition = 15 // server -> client: where the pointer is, drawn by the client above the video
+    case cursorShape = 16    // server -> client: what the pointer looks like (PNG), sent when it changes
 }
 
 struct Hello {
@@ -392,6 +395,23 @@ func interfaceName(of conn: NWConnection) -> String? {
     conn.currentPath?.availableInterfaces.first?.name
 }
 
+/// What kind of network interface this is, as macOS describes it.
+enum InterfaceKind: Equatable { case wifi, wired, loopback, other }
+
+/// What kind of interface an established connection is using, as macOS describes it.
+func interfaceKind(of conn: NWConnection) -> InterfaceKind {
+    interfaceKind(conn.currentPath?.availableInterfaces.first?.type)
+}
+
+func interfaceKind(_ type: NWInterface.InterfaceType?) -> InterfaceKind {
+    switch type {
+    case .wifi: return .wifi
+    case .wiredEthernet: return .wired
+    case .loopback: return .loopback
+    default: return .other
+    }
+}
+
 /// Looks up a live network interface object by BSD name (for example "bridge0").
 func findInterface(named name: String, timeout: TimeInterval = 1.0) -> NWInterface? {
     let monitor = NWPathMonitor()
@@ -418,6 +438,9 @@ enum Prefs {
     }
     static let firstRunDone = "tbdisplay.firstRunDone"
     static let everConnected = "tbdisplay.everConnected"     // an iMac has connected to this MacBook
+    static let updateCheckDisabled = "tbdisplay.updateCheckDisabled"   // the person turned automatic update checks off
+    static let lastUpdateCheck = "tbdisplay.lastUpdateCheck"           // when the last successful check finished
+    static let connectionMode = "tbdisplay.connectionMode"             // Thunderbolt, Wi-Fi or Ethernet
 }
 
 // MARK: - Logging and arguments

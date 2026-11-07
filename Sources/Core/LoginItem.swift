@@ -12,11 +12,21 @@ enum LoginItemState: Equatable {
 enum LoginItemAction: Equatable { case register, unregister, openSettings, nothing }
 
 extension LoginItemState {
+    /// From SMAppService.Status raw values: 0 not registered, 1 enabled, 2 requires approval, 3 not found.
+    init(systemStatus: Int) {
+        switch systemStatus {
+        case 0, 3: self = .off          // 3 is what macOS reports for an app it has not registered yet
+        case 1: self = .on
+        case 2: self = .needsApproval
+        default: self = .unavailable
+        }
+    }
+
     var title: String {
         switch self {
         case .on, .off: return "Open at login"
         case .needsApproval: return "Open at login (allow it in System Settings)"
-        case .unavailable: return "Open at login (the app must be installed first)"
+        case .unavailable: return "Open at login (move TBDisplay to Applications, then reopen it)"
         }
     }
     var isChecked: Bool { self == .on }

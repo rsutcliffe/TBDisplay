@@ -22,18 +22,19 @@ Usage: tbdisplay-client [options]
 
 Pairing: this Mac needs the same pairing key as the MacBook, in the same place. Copy pairing-key from the
 MacBook by AirDrop into ~/Library/Application Support/tbdisplay/ on this Mac.
+  --check             Print the connection check (what the Check connection button shows) and exit
   --help              Show this help
 """
 
 LogFile.shared = LogFile(url: LogFile.defaultURL(name: "client"))
 
-let args = Arguments(flagNames: ["any-interface", "windowed", "input", "help"])
+let args = Arguments(flagNames: ["any-interface", "windowed", "input", "check", "help"])
 if args.flag("help") { print(usage); exit(0) }
 
 struct ClientOptions {
     var host: String?
     var port: UInt16 = defaultPort
-    var interfaceName: String? = defaultInterfaceName
+    var policy: InterfacePolicy = .mode(ConnectionMode.saved())
     var windowed = false
     var screenIndex = 0
     var input = false
@@ -42,8 +43,8 @@ struct ClientOptions {
 var options = ClientOptions()
 options.host = args.string("host")
 if let port = args.int("port") { options.port = UInt16(clamping: port) }
-if let name = args.string("interface") { options.interfaceName = name }
-if args.flag("any-interface") { options.interfaceName = nil }
+if let name = args.string("interface") { options.policy = .named(name) }
+if args.flag("any-interface") { options.policy = .any }
 options.windowed = args.flag("windowed")
 if let screen = args.int("screen") { options.screenIndex = screen }
 if CommandLine.arguments.contains("--pin") {
@@ -51,6 +52,12 @@ if CommandLine.arguments.contains("--pin") {
     exit(1)
 }
 options.input = args.flag("input")
+
+// --check: the same check as the Check connection button, printed here, for support and for the tests
+if args.flag("check") {
+    print(DiagnosticsRunner.run(appVersion: appVersion, protocolVersion: protocolVersion, extra: MacBookProbe.run(policy: options.policy)))
+    exit(0)
+}
 
 // MARK: - Window and video view
 
@@ -61,6 +68,8 @@ final class KeyableWindow: NSWindow {
 
 final class VideoView: NSView {
     let displayLayer = AVSampleBufferDisplayLayer()
+    private let cursorLayer = CALayer()      // the MacBook's pointer, drawn here so it never waits for a video frame
+    private var cursorPosition: CursorPosition?
     private let statusLabel = NSTextField(labelWithString: "")
     var onQuit: (() -> Void)?
     var onInput: ((InputEvent) -> Void)?   // set only when --input is on
@@ -72,6 +81,8 @@ final class VideoView: NSView {
         displayLayer.videoGravity = .resizeAspect
         displayLayer.backgroundColor = NSColor.black.cgColor
         layer?.addSublayer(displayLayer)
+        cursorLayer.isHidden = true
+        layer?.addSublayer(cursorLayer)
 
         statusLabel.textColor = NSColor(white: 0.6, alpha: 1)
         statusLabel.font = .systemFont(ofSize: 22, weight: .medium)
@@ -95,6 +106,43 @@ final class VideoView: NSView {
         CATransaction.setDisableActions(true)
         displayLayer.frame = bounds
         displayLayer.contentsScale = window?.backingScaleFactor ?? 2
+        CATransaction.commit()
+        placeCursor()
+    }
+
+    // MARK: Pointer from the MacBook (main thread)
+
+    func setCursorShape(_ shape: CursorShape) {
+        guard let image = NSImage(data: shape.png), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let scale = CGFloat(shape.scale)
+        let size = CGSize(width: CGFloat(cg.width) / scale, height: CGFloat(cg.height) / scale)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        cursorLayer.contents = cg
+        cursorLayer.contentsScale = scale
+        cursorLayer.bounds = CGRect(origin: .zero, size: size)
+        // The hotspot is measured from the top left of the image, and layer anchors from the bottom left.
+        cursorLayer.anchorPoint = CGPoint(x: CGFloat(shape.hotspotX) / 100 / size.width,
+                                          y: 1 - CGFloat(shape.hotspotY) / 100 / size.height)
+        CATransaction.commit()
+        placeCursor()
+    }
+
+    func setCursorPosition(_ position: CursorPosition?) {
+        cursorPosition = position
+        placeCursor()
+    }
+
+    private func placeCursor() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let p = cursorPosition, p.visible, cursorLayer.contents != nil {
+            cursorLayer.position = CGPoint(x: CGFloat(p.x) / 1_000_000 * bounds.width,
+                                           y: bounds.height - CGFloat(p.y) / 1_000_000 * bounds.height)
+            cursorLayer.isHidden = false
+        } else {
+            cursorLayer.isHidden = true
+        }
         CATransaction.commit()
     }
 
@@ -175,7 +223,7 @@ final class VideoView: NSView {
 // MARK: - Client
 
 final class Client {
-    private let options: ClientOptions
+    private var options: ClientOptions
     private let hello: Hello
     private let view: VideoView
     private let queue = DispatchQueue(label: "tbdisplay.client", qos: .userInteractive)
@@ -183,6 +231,14 @@ final class Client {
 
     // State on `queue`
     private var model = ClientModel()
+    private static let connectTimeout: TimeInterval = 8
+    // After Disconnect the client asks the MacBook every so often whether it is allowing connections again.
+    // TBDISPLAY_ENDED_POLL_SECONDS lets the tests shorten it.
+    private static let endedPollSeconds: TimeInterval = ProcessInfo.processInfo.environment["TBDISPLAY_ENDED_POLL_SECONDS"].flatMap(TimeInterval.init) ?? 30
+    private var endedPollStartedAt = Date()
+    private var endedPolling = false
+    private var browseStartedAt = Date()     // when the current search for the MacBook began
+    private var ended = false              // the MacBook said Disconnect: no retrying until the person presses Reconnect
     private var connection: NWConnection?
     private var key = Data()
     private var browser: NWBrowser?
@@ -195,6 +251,7 @@ final class Client {
     private var stallReported = false
     private var shownPicture = false
     private var mouseCaptured = false
+    private var cursorLogged = false       // the first pointer message of a connection is logged once
     private var watchdog: DispatchSourceTimer?
     private var statFrames = 0
     private var statBytes = 0
@@ -246,6 +303,29 @@ final class Client {
                 self.stallReported = true
                 self.event(.stalled)
             }
+            // A search that has found nothing for a while is started afresh: after a cable link returns, Bonjour can
+            // stay silent about the Thunderbolt Bridge until the client is restarted.
+            if self.ended, !self.endedPolling, self.connection == nil,
+               BrowseRefresh.due(startedAt: self.endedPollStartedAt, now: Date(), interval: Client.endedPollSeconds) {
+                self.endedPolling = true
+                let policy = self.options.policy
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    let result = MacBookProbe.run(policy: policy)
+                    self?.queue.async {
+                        guard let self else { return }
+                        self.endedPolling = false
+                        self.endedPollStartedAt = Date()
+                        if self.ended, ConnectionProbe.canReconnect(result.outcome) {
+                            log("The MacBook is allowing connections again. Reconnecting.")
+                            self.reconnect()
+                        }
+                    }
+                }
+            }
+            if self.connection == nil, self.browser != nil, !self.ended,
+               BrowseRefresh.due(startedAt: self.browseStartedAt, now: Date()) {
+                self.browse()
+            }
             guard self.connection != nil,
                   Watchdog.shouldDrop(armed: self.gotServerData, lastMessage: self.lastMessage, now: Date(), limit: 4) else { return }
             log("No data from the MacBook for 4 seconds")
@@ -281,6 +361,7 @@ final class Client {
     // MARK: Connecting (on queue)
 
     private func connect() {
+        guard !ended else { return }
         // The pairing key is read each time, so copying it in while the client waits is enough.
         guard let loaded = PairingKey.load() else {
             log("No pairing key. Copy pairing-key from the MacBook to \(PairingKey.defaultURL.path)")
@@ -292,7 +373,7 @@ final class Client {
         event(.keyFound)
         if let host = options.host {
             let params = makeTCPParameters(key: key)
-            if let name = options.interfaceName {
+            if case .named(let name) = options.policy {
                 if let iface = findInterface(named: name) {
                     params.requiredInterface = iface
                 } else {
@@ -308,24 +389,26 @@ final class Client {
     }
 
     private func browse() {
-        let where_ = options.interfaceName.map { "on \($0)" } ?? "on any interface"
-        log("Looking for the MacBook \(where_)")
+        browser?.cancel()
+        browseStartedAt = Date()
+        log("Looking for the MacBook \(options.policy.summary)")
 
         let browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: makeTCPParameters(key: key))
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self, self.connection == nil else { return }
+            let policy = self.options.policy
             let match: (NWBrowser.Result, NWInterface?)?
-            if let name = self.options.interfaceName {
+            if case .any = policy {
+                match = results.first.map { ($0, nil) }
+            } else {
                 match = results.lazy.compactMap { result -> (NWBrowser.Result, NWInterface?)? in
-                    guard let iface = result.interfaces.first(where: { $0.name == name }) else { return nil }
+                    guard let iface = result.interfaces.first(where: { policy.allows(interfaceName: $0.name, kind: interfaceKind($0.type)) }) else { return nil }
                     return (result, iface)
                 }.first
                 if match == nil, !results.isEmpty {
                     let seen = results.flatMap { $0.interfaces.map(\.name) }
-                    log("MacBook found on \(Set(seen).sorted().joined(separator: ", ")) but not \(name). Check the cable and the Thunderbolt Bridge in Network settings.")
+                    log("MacBook found on \(Set(seen).sorted().joined(separator: ", ")) but not \(policy.summary). Check the cable, or change Connect over on both Macs.")
                 }
-            } else {
-                match = results.first.map { ($0, nil) }
             }
             guard let found = match else { return }
             let (result, iface) = found
@@ -379,6 +462,14 @@ final class Client {
             }
         }
         conn.start(queue: queue)
+        // A connection that never gets going (a handshake nobody answers, an address that went stale) waits for ever
+        // otherwise, and the client sits on "Connecting..." until it is quit.
+        queue.asyncAfter(deadline: .now() + Client.connectTimeout) { [weak self] in
+            guard let self, self.connection === conn else { return }
+            if case .ready = conn.state { return }
+            log("No answer from the MacBook after \(Int(Client.connectTimeout)) seconds. Trying again.")
+            self.disconnected(nil)
+        }
     }
 
     private func disconnected(_ error: Error?, lost: Bool = false) {
@@ -389,11 +480,36 @@ final class Client {
         format = nil
         awaitingKeyframe = true
         renderer.flush(removingDisplayedImage: true) { }
+        DispatchQueue.main.async { self.view.setCursorPosition(nil) }
+        cursorLogged = false
         event(lost ? .lost : .closed(hadData: gotServerData))
         captureMouse(false)
         if gotServerData { lastProgress = Date(); stallReported = false }      // a link that was working starts a fresh wait
         gotServerData = false   // so the watchdog leaves the next attempt alone until it has data
         queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.connect() }
+    }
+
+    /// The person chose a different way to connect. It is saved, and the search starts again that way.
+    func setMode(_ mode: ConnectionMode) {
+        mode.save()
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.options.policy = .mode(mode)
+            self.ended = false
+            log("Connect over: \(mode.title).")
+            if self.connection != nil { self.disconnected(nil) } else { self.connect() }
+        }
+    }
+
+    /// The person pressed Reconnect after the MacBook ended the connection.
+    func reconnect() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.ended = false
+            self.lastProgress = Date()
+            self.stallReported = false
+            self.connect()
+        }
     }
 
     private func sendHello() {
@@ -416,8 +532,19 @@ final class Client {
             let text = String(decoding: payload.prefix(300), as: UTF8.self)
             log("The MacBook says: \(text)")
             event(.refused(text))
+        case .ended:
+            log("The MacBook ended the connection. Asking every \(Int(Client.endedPollSeconds)) seconds whether it allows connections again.")
+            ended = true
+            endedPollStartedAt = Date()
+            event(.endedByMacBook)
         case .heartbeat:
             markServerData()
+        case .cursorPosition:
+            markServerData()
+            if let position = try? CursorPosition.decode(payload) { DispatchQueue.main.async { self.view.setCursorPosition(position) } }
+        case .cursorShape:
+            if !cursorLogged { cursorLogged = true; log("The MacBook draws the pointer on this screen (pointer shape received).") }
+            if let shape = try? CursorShape.decode(payload) { DispatchQueue.main.async { self.view.setCursorShape(shape) } }
         case .videoConfig:
             do {
                 let config = try VideoConfig.decode(payload)
@@ -573,9 +700,12 @@ window.makeFirstResponder(videoView)
 // Outside --windowed there are two things to show: the setup window while nothing is streaming, and the
 // full-screen picture once it is. The model decides which.
 let setupWindow: SetupWindow? = options.windowed ? nil : SetupWindow()
+UpdateController.shared.checkAtLaunchIfDue()
 setupWindow?.onQuit = videoView.onQuit
 var cursorHidden = false
+let displayAwake = DisplayAwake()      // held only while a picture is streaming
 func present(_ model: ClientModel) {
+    displayAwake.set(model.keepsDisplayAwake)
     guard let setupWindow else {
         videoView.setStatus(model.statusMessage.isEmpty ? nil : model.statusMessage)
         return
@@ -596,6 +726,7 @@ func present(_ model: ClientModel) {
 }
 if options.windowed { window.makeKeyAndOrderFront(nil) }
 let reportWindow = ReportWindow()
+reportWindow.extra = { MacBookProbe.run(policy: options.policy) }
 setupWindow?.onCheck = { reportWindow.show() }
 let pairingController = PairingGuestController()
 pairingController.onChange = { setupWindow?.pairing = $0 }
@@ -614,12 +745,7 @@ let checklistWindow = ChecklistWindow(role: .client) { action in
 present(ClientModel())
 if setupWindow != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { checklistWindow.showIfNeeded() } }
 
-// Keep the iMac screen awake while it is acting as a display.
-var sleepAssertion: IOPMAssertionID = 0
-IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
-                            IOPMAssertionLevel(kIOPMAssertionLevelOn),
-                            "tbdisplay is showing the MacBook display" as CFString,
-                            &sleepAssertion)
+PowerLog.start()
 
 // A minimal menu so Cmd-Q works.
 let mainMenu = NSMenu()
@@ -635,6 +761,8 @@ app.mainMenu = mainMenu
 
 let client = Client(options: options, screen: screen, view: videoView)
 client.onModel = present
+setupWindow?.onReconnect = { client.reconnect() }
+setupWindow?.onModeChange = { client.setMode($0) }
 if options.input { videoView.onInput = { client.sendInput($0) } }
 client.start()
 

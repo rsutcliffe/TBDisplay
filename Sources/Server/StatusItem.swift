@@ -10,7 +10,17 @@ final class StatusController: NSObject, NSMenuDelegate {
     private var timer: Timer?
     private var shownConnected = false
     private var pairingPanel: PairingPanel?
-    private lazy var reportWindow = ReportWindow()
+    private lazy var reportWindow: ReportWindow = {
+        let window = ReportWindow()
+        window.extra = { [unowned self] in
+            // Read on the main thread, where the server's state belongs
+            DispatchQueue.main.sync {
+                (ServerStatus.findings(paused: self.server.gate.isPaused, policy: self.server.policy,
+                                       everConnected: Prefs.defaults.bool(forKey: Prefs.everConnected)), nil)
+            }
+        }
+        return window
+    }()
     private lazy var checklistWindow = ChecklistWindow(role: .server) { [weak self] action in
         switch action {
         case .openSettings(let url): NSWorkspace.shared.open(url)
@@ -62,12 +72,29 @@ final class StatusController: NSObject, NSMenuDelegate {
             line("Connected: \(stats.width) x \(stats.height)")
             line(String(format: "%d Mbps, %.0f fps", stats.bitrate / 1_000_000, stats.fps))
             line(String(format: "Encode %.0f ms, send %.0f ms", stats.encodeMs, stats.sendMs))
+        } else if server.gate.isPaused {
+            line("Paused. The iMac is refused")
         } else {
             line("Waiting for the iMac")
         }
         menu.addItem(.separator())
         action("Allow iMac keyboard and mouse", #selector(toggleInput), checked: state.allowInput)
-        action("Disconnect", #selector(disconnect), enabled: stats.connected)
+        if server.gate.isPaused {
+            action("Allow connections", #selector(resume))
+        } else {
+            action("Disconnect", #selector(disconnect), enabled: stats.connected)
+        }
+        let modeItem = NSMenuItem(title: "Connect over", action: nil, keyEquivalent: "")
+        let modeMenu = NSMenu()
+        for mode in ConnectionMode.allCases {
+            let entry = NSMenuItem(title: mode.title, action: #selector(chooseMode(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = mode.rawValue
+            entry.state = server.policy == .mode(mode) ? .on : .off
+            modeMenu.addItem(entry)
+        }
+        modeItem.submenu = modeMenu
+        menu.addItem(modeItem)
         menu.addItem(.separator())
         action("Pair a new Mac…", #selector(pairNewMac))
         action("Check connection…", #selector(checkConnection))
@@ -75,6 +102,11 @@ final class StatusController: NSObject, NSMenuDelegate {
         let login = LoginItemControl.state
         action(login.title, #selector(toggleLogin), enabled: login.isEnabled, checked: login.isChecked)
         action("Show log in Finder", #selector(showLog))
+        if let update = UpdateController.shared.available {
+            action("Update available: TBDisplay \(update.version)…", #selector(openUpdate))
+        }
+        action("Check for updates…", #selector(checkForUpdates))
+        action("Check for updates automatically", #selector(toggleAutomaticUpdates), checked: UpdateController.shared.automaticChecks)
         action("Reveal pairing key in Finder", #selector(revealKey))
         action("Create new pairing key…", #selector(newKey))
         menu.addItem(.separator())
@@ -95,6 +127,18 @@ final class StatusController: NSObject, NSMenuDelegate {
     }
 
     @objc private func disconnect() { server.disconnect() }
+
+    @objc private func resume() { server.resume() }
+
+    @objc private func chooseMode(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String, let mode = ConnectionMode(rawValue: raw) { server.setMode(mode) }
+    }
+
+    @objc private func checkForUpdates() { UpdateController.shared.checkNow() }
+
+    @objc private func openUpdate() { UpdateController.shared.openDownloadPage() }
+
+    @objc private func toggleAutomaticUpdates() { UpdateController.shared.automaticChecks.toggle() }
 
     @objc private func toggleLogin() { LoginItemControl.click() }
 

@@ -19,7 +19,8 @@ struct ServerOptions {
     var adaptBitrate = true
     var fps = 60
     var maxInFlight = 2
-    var allowedInterfaces: Set<String>? = [defaultInterfaceName] // nil means any interface
+    var policy: InterfacePolicy = .mode(ConnectionMode.saved())     // the menu changes it while the app runs
+    var pausedNotice: String?          // set while Disconnect has paused this MacBook: the iMac is told, then closed
     var hiDPI = true
     var recordDirectory: URL?          // set by --record: a copy of the encoded stream is saved here for diagnosis
     var recordSeconds = 30.0
@@ -32,7 +33,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private let state: ServerState
     private let queue = DispatchQueue(label: "tbdisplay.session", qos: .userInteractive)
     var onClose: (() -> Void)?
-    var onAuthenticated: (() -> Void)?       // the TLS handshake with the pairing key succeeded
+    var onAuthenticated: (() -> Void)?       // the client has sent a good hello (the TLS handshake alone is not enough)
     var onHandshakeFailed: (() -> Void)?     // wrong key, no key, or not TLS at all
 
     // Pipeline state, only touched on `queue`
@@ -63,6 +64,11 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private var statEncodeMs = 0.0, statSendMs = 0.0, statTimed = 0
     private var winSendMs = 0.0, winFrames = 0, winBytes = 0
     private var lastStatsIdle = false
+    private var cursorTracker = CursorTracker()
+    private var cursorTimer: DispatchSourceTimer?
+    private var cursorShapeTimer: DispatchSourceTimer?     // runs on the main thread, where NSCursor is read
+    private var cursorSendsPending = 0                     // pointer messages handed to the network and not yet sent
+    private var lastCursorShape: CursorShape?              // main thread only
 
     // Main-thread state
     private var display: VirtualDisplay?
@@ -87,9 +93,19 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
             switch state {
             case .ready:
                 let name = interfaceName(of: self.connection)
-                if let allowed = self.options.allowedInterfaces, !allowed.contains(name ?? "") {
-                    log("Rejected \(self.connection.endpoint) on \(name ?? "an unknown interface"). Only \(allowed.sorted().joined(separator: ", ")) is allowed (use --any-interface to change).")
-                    self.close()
+                if let paused = self.options.pausedNotice {
+                    log("Turned away \(self.connection.endpoint): connections are paused.")
+                    self.connection.send(content: frameMessage(.notice, Data(paused.utf8)), completion: .contentProcessed { [weak self] _ in
+                        self?.queue.async { self?.close() }
+                    })
+                    return
+                }
+                if !self.options.policy.allows(interfaceName: name ?? "", kind: interfaceKind(of: self.connection)) {
+                    log("Rejected \(self.connection.endpoint) on \(name ?? "an unknown interface"). This Mac accepts connections \(self.options.policy.summary) (change Connect over in the menu bar item).")
+                    // The iMac is told why, so its window can say so instead of just losing the connection.
+                    self.connection.send(content: frameMessage(.notice, Data(self.options.policy.refusalNotice.utf8)), completion: .contentProcessed { [weak self] _ in
+                        self?.queue.async { self?.close() }
+                    })
                     return
                 }
                 guard negotiatedAsExpected(self.connection) else {
@@ -100,7 +116,13 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                 }
                 log("Client connected from \(self.connection.endpoint) via \(name ?? "unknown interface"), \(encryptionSummary(of: self.connection))")
                 self.handshakeDone = true
-                DispatchQueue.main.async { self.onAuthenticated?() }
+                // It counts as a client, and may replace the live one, only once it sends a hello. A connection check
+                // never does, so it cannot drop a stream. One that never says hello is closed.
+                self.queue.asyncAfter(deadline: .now() + 10) { [weak self] in
+                    guard let self, !self.started, !self.closed else { return }
+                    log("A client connected but never said hello within 10 seconds. Dropping it.")
+                    self.close()
+                }
                 receiveMessages(on: self.connection, maxMessage: 4096,   // the client sends tiny messages only
                                 onMessage: { [weak self] type, payload in self?.handle(type, payload) },
                                 onClose: { [weak self] error in
@@ -155,6 +177,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                     return
                 }
                 started = true
+                DispatchQueue.main.async { self.onAuthenticated?() }
                 self.hello = hello
                 log("iMac screen: \(hello.pixelWidth)x\(hello.pixelHeight) px at \(hello.scale)x, \(hello.refreshRate) Hz, TBDisplay \(hello.appVersion.isEmpty ? "(version not given)" : hello.appVersion)")
                 startPipeline(hello)
@@ -333,7 +356,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         config.colorSpaceName = CGColorSpace.sRGB
         config.queueDepth = 5
-        config.showsCursor = true
+        config.showsCursor = false     // the pointer travels as its own small messages (see startCursor)
         config.scalesToFit = false
 
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
@@ -455,6 +478,53 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         stats.setEventHandler { [weak self] in self?.logStats() }
         stats.resume()
         statsTimer = stats
+        startCursor()
+    }
+
+    // MARK: Pointer (on queue, shape on main)
+
+    /// The pointer is drawn by the iMac. Its place is sent up to 120 times a second, only when it moved, and its
+    /// look is sent when it changes. If the network is behind, positions are skipped instead of queued.
+    private func startCursor() {
+        let position = DispatchSource.makeTimerSource(queue: queue)
+        position.schedule(deadline: .now(), repeating: .milliseconds(8))
+        position.setEventHandler { [weak self] in
+            guard let self, !self.closed else { return }
+            let point = CGEvent(source: nil)?.location ?? .zero
+            guard let message = self.cursorTracker.update(point: point, bounds: CGDisplayBounds(self.virtualDisplayID)) else { return }
+            guard self.cursorSendsPending < 50 else { self.cursorTracker.reset(); return }   // sent again once it drains
+            self.sendCursor(.cursorPosition, message.encode())
+        }
+        position.resume()
+        cursorTimer = position
+
+        let shape = DispatchSource.makeTimerSource(queue: .main)
+        shape.schedule(deadline: .now(), repeating: .milliseconds(50))
+        shape.setEventHandler { [weak self] in
+            guard let self, !self.mainClosed, let next = StreamSession.currentCursorShape(), next != self.lastCursorShape else { return }
+            self.lastCursorShape = next
+            self.queue.async { if !self.closed { self.sendCursor(.cursorShape, next.encode()) } }
+        }
+        shape.resume()
+        cursorShapeTimer = shape
+    }
+
+    private func sendCursor(_ type: MessageType, _ payload: Data) {
+        cursorSendsPending += 1
+        connection.send(content: frameMessage(type, payload), completion: .contentProcessed { [weak self] _ in
+            self?.queue.async { self?.cursorSendsPending -= 1 }
+        })
+    }
+
+    /// The system pointer as a PNG. Falls back to the arrow when macOS gives none, so the pointer always shows.
+    private static func currentCursorShape() -> CursorShape? {
+        let cursor = NSCursor.currentSystem ?? NSCursor.arrow
+        let image = cursor.image
+        guard image.size.width > 0, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { return nil }
+        let scale = UInt8(max(1, min(3, (Double(cg.width) / image.size.width).rounded())))
+        return CursorShape(hotspotX: UInt32(max(0, cursor.hotSpot.x * 100)), hotspotY: UInt32(max(0, cursor.hotSpot.y * 100)),
+                           scale: scale, png: png)
     }
 
     private func everySecond() {
@@ -497,6 +567,16 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         queue.async { self.close() }
     }
 
+    /// The person chose Disconnect. The client is told so it stops retrying, then the session closes.
+    func end() {
+        queue.async {
+            guard !self.closed else { return }
+            self.connection.send(content: frameMessage(.ended, Data()), completion: .contentProcessed { [weak self] _ in
+                self?.queue.async { self?.close() }
+            })
+        }
+    }
+
     private func close() {
         guard !closed else { return }
         closed = true
@@ -510,6 +590,11 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         secondTimer = nil
         statsTimer?.cancel()
         statsTimer = nil
+        cursorTimer?.cancel()
+        cursorTimer = nil
+        let shapeTimer = cursorShapeTimer
+        cursorShapeTimer = nil
+        DispatchQueue.main.async { shapeTimer?.cancel() }
         parked = nil
         let stream = self.stream
         self.stream = nil

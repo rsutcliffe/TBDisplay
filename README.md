@@ -10,13 +10,20 @@ AirPlay to Mac was the built-in way round it. It worked, but the picture was poo
 
 So I wrote two small macOS apps. The server runs on the MacBook, creates a virtual display and streams it as hardware HEVC. The client runs on the iMac and shows the stream full screen. It solves one small problem for one pair of machines. I am sharing it in case it helps someone with the same problem.
 
+## How it looks on the MacBook
+
+The iMac appears in System Settings, Displays, as "iMac via Thunderbolt". It is an extended display with the full 4480 x 2520 panel available and 2240 x 1260 as the default.
+
+<img src="docs/displays-settings.png" alt="macOS System Settings on the MacBook, Displays pane, showing iMac via Thunderbolt as an extended display set to 2240 x 1260 (Default)" width="420">
+
 ## What it does
 
 - Streams at the iMac's full native resolution (4480 x 2520 on the 24-inch iMac), shown as a 2240 x 1260 Retina desktop.
 - Keeps the picture steady over long sessions: at most two frames are in flight, and a newer frame replaces a waiting one, so delay does not build up.
+- Draws the pointer on the iMac itself. The MacBook sends where the pointer is and what it looks like as two small messages, so the pointer moves without waiting for a video frame.
 - Encrypts the link (TLS 1.2, ECDHE-PSK with ChaCha20-Poly1305) with a pairing key shared by the two Macs.
 - Pairs without copying files: the MacBook and the iMac each show a six-digit code, and you confirm they match.
-- Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you ask for another interface.
+- Accepts connections only over the Thunderbolt Bridge (`bridge0`) unless you choose another way in **Connect over**: Wi-Fi or Ethernet (a wired adapter, which includes a USB network link between the Macs). Set the same choice on both Macs. If they differ, the iMac window says which one the MacBook accepts.
 - Optionally forwards the iMac's keyboard and mouse to the MacBook (switched on from the server's menu bar item).
 - Leaves sound alone. Audio stays on the MacBook.
 
@@ -52,7 +59,23 @@ Copy `build/TBDisplay Client.app` to the iMac and open it. Open `build/TBDisplay
 - Saved position of the virtual display: `~/Library/Application Support/tbdisplay/layout.json`.
 - Logs: `~/Library/Logs/TBDisplay/server.log` and `client.log`, owner-only, up to 1 MB each with one older copy. "Show log" in the server menu and in the client window opens the folder.
 - Preferences (first-run flag, whether an iMac has ever connected): the apps' own defaults, under `local.tbdisplay.server` and `local.tbdisplay.client`.
-- "Open at login" is a checkbox in each app. It only works for an installed app (in Applications), and macOS may ask you to allow it in System Settings.
+- "Open at login" is a checkbox in each app. It only works when the app runs from the Applications folder, not from Downloads or straight from the disk image, so move it there and reopen it. macOS may then ask you to allow it in System Settings.
+
+## If it will not connect
+
+Press **Check connection...** in the iMac window. The iMac really tries to reach the MacBook over the connection chosen in **Connect over**, and the top line of the report says why it cannot: the MacBook cannot be seen, it is visible only over another kind of connection, it did not answer, it does not accept this iMac's pairing key, or it sent its own reason (for example that it is paused or accepts another connection). The cable and Thunderbolt Bridge findings follow underneath. If the MacBook answers, a complaint about another cable is shown as a note.
+
+On the MacBook, the same button shows what the MacBook knows: whether it is paused, which connection it accepts, and whether an iMac has ever connected. Choosing **Disconnect** in the MacBook's menu pauses it until you choose **Allow connections**. While it is paused it tells any iMac that asks, so the iMac window says so. `tbdisplay-client --check` prints the iMac's report in Terminal.
+
+If the Thunderbolt link will not form, run `Scripts/tb-recover.sh` on the MacBook. It reads both Macs over SSH, tries a few software steps in order (cycle the bridge interfaces, switch the Thunderbolt Bridge service off and on, and with `--include-sleep` a sleep and wake of the iMac), and logs which one, if any, brought the link back in `~/Library/Logs/TBDisplay/recover.log`. None of this is documented by Apple. Cutting the iMac's power for 30 seconds is the only fix known to work so far.
+
+## Updates
+
+TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item. The iMac client has no button for it: it checks quietly at launch, at most once a day, and shows "TBDisplay X is available" as a link to the release page when there is a newer one. The MacBook does the same through an "Update available" menu item. Untick "Check for updates automatically" to stop the daily check.
+
+- The check is one request to GitHub's public API (`api.github.com`). It sends the app name and version and nothing else.
+- It never downloads or installs anything. It opens the release page in your browser, and you install the notarised disk image yourself. It ignores any link that is not this project's own release page.
+- For maintainers: the check compares the running version (`appVersion` in `Sources/Shared/Shared.swift`) with the tag of the latest published release. Tag each release `v<appVersion>`, for example `v1.8.0`, and publish it as a normal release, not a draft or pre-release.
 
 ## Environment variables
 
@@ -70,7 +93,7 @@ None are needed to use the apps. They exist so the tests do not touch your real 
 ## Limits you should know about
 
 - It uses Apple's private `CGVirtualDisplay` interface, which is undocumented. A macOS update could break it without notice, and apps using it cannot be distributed through the Mac App Store.
-- While the "Pair a new Mac" window is open (at most 120 seconds), the MacBook accepts pairing connections on every network, including Wi-Fi, so pairing works wherever the two Macs can see each other. Someone else on the same network could take the single pairing slot first. They would get the key only if you clicked "Yes, it matches" when the iMac was not showing the same code, so only click Yes when both screens show the same six digits. The streaming port accepts only the Thunderbolt Bridge by default, so a copied key alone does not give a Wi-Fi visitor your screen. If you ever suspect a key was taken, choose "Create new pairing key..." in the server menu.
+- While the "Pair a new Mac" window is open (at most 120 seconds), the MacBook accepts pairing connections on every network, including Wi-Fi, so pairing works wherever the two Macs can see each other. Someone else on the same network could take the single pairing slot first. They would get the key only if you clicked "Yes, it matches" when the iMac was not showing the same code, so only click Yes when both screens show the same six digits. The streaming port accepts only the Thunderbolt Bridge by default, so a copied key alone does not give a Wi-Fi visitor your screen. Choosing Wi-Fi or Ethernet in **Connect over** lets other devices on that network reach the streaming port, with the pairing key and the encrypted link as the only protection, so leave it on Thunderbolt unless you need the other way. If you ever suspect a key was taken, choose "Create new pairing key..." in the server menu.
 - The pairing protocol and the encrypted link have had internal security reviews but no external professional audit. Do not rely on it to protect anything sensitive.
 - After a Thunderbolt cable was unplugged and plugged back in, the link did not return on my test pair until the iMac was restarted. The apps show advice about this, but it is a macOS or hardware behaviour, not something the apps fix.
 - No audio, one iMac per MacBook, and no support for Intel Macs or macOS versions before 14.

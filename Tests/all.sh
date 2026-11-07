@@ -26,6 +26,7 @@ run "test wiring"           Tests/test_lists.sh
 run "unit checks"            ./build.sh test
 run "Xcode package (XCTest)" swift_tests
 run "release script"         Tests/release_script_test.sh
+run "link recovery script"   Tests/tb_recover_test.sh
 run "encoder speed"          Tests/encoder_latency.sh
 if [ "${1:-}" = "full" ]; then
     run "end to end (loopback)"  Tests/loopback.sh

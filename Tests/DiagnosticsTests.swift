@@ -27,7 +27,7 @@ func runDiagnosticsTests() {
     // USB
     let usb2 = Diagnostics.usb(fixture("usb-imac-usb2-only.txt"))
     check(usb2.count == 1 && usb2[0].level == .problem && usb2[0].title == "The other Mac is connected over USB 2 only", "a Mac seen at 480 Mb/s is a problem")
-    check(usb2.first?.detail.contains("480 Mb/s") == true && usb2.first?.detail.contains("Thunderbolt 4") == true, "the advice names the speed and the cable to buy")
+    check(usb2.first?.detail.contains("480 Mb/s") == true && usb2.first?.detail.contains("stale Thunderbolt Bridge") == true, "the finding names the speed and says the bridge can be stale, not only the cable")
     check(Diagnostics.usb(fixture("usb-nothing-attached.txt")).isEmpty, "no other Mac on USB says nothing")
     check(Diagnostics.usb(fixture("usb-imac-usb2-only.txt").replacingOccurrences(of: "480 Mb/s", with: "10 Gb/s")).isEmpty, "a fast USB link is not flagged")
 
@@ -53,4 +53,17 @@ func runDiagnosticsTests() {
     check(report.contains("TBDisplay 1.7.0 (protocol 5)"), "the report states the versions")
     check(report.contains("Problem: Bad cable") && report.contains("OK: Fine") && report.contains("Note: Hmm"), "each finding is labelled")
     check(report.contains("x") && report.contains("y") && report.contains("z"), "each finding's advice is included")
+
+    // When the link will not form, the report says what has worked
+    let cableProblem = Finding(level: .problem, title: "Thunderbolt Bridge is not active", detail: "x")
+    let advised = Diagnostics.advice([cableProblem])
+    check(advised.count == 1 && advised[0].level == .note && advised[0].title == "What has worked", "a cable-level problem gets one advice note")
+    check(advised.first?.detail.contains("delete Thunderbolt Bridge") == true && advised.first?.detail.contains("add it again") == true && advised.first?.detail.contains("Unplug the cable at the MacBook") == true, "the advice says to unplug, delete and re-add the bridge")
+    check(advised.first?.detail.contains("Thunderbolt 4 cable") == true, "the cable comes last in the advice")
+    check(Diagnostics.advice([Finding(level: .problem, title: "No Thunderbolt device on any port", detail: "x")]).count == 1, "no device on any port gets the advice")
+    check(Diagnostics.advice([Finding(level: .problem, title: "The other Mac is connected over USB 2 only", detail: "x")]).count == 1, "USB 2 only gets the advice")
+    check(Diagnostics.advice([Finding(level: .ok, title: "Thunderbolt Bridge is up", detail: "x")]).isEmpty, "a working link gets no advice")
+    check(Diagnostics.advice([Finding(level: .note, title: "Thunderbolt Bridge is not active", detail: "x")]).isEmpty, "a note is not a problem, so no advice")
+    check(Diagnostics.advice([cableProblem, cableProblem]).count == 1, "several cable problems still give one advice note")
+    check(!Diagnostics.usb("  USB 3.1 Bus:\n    iMac:\n      Link Speed: 480 Mb/s\n").map(\.detail).joined().contains("Use a Thunderbolt 4 cable"), "the USB 2 wording no longer blames the cable first")
 }

@@ -20,6 +20,7 @@ fails=0
 PREFS_SUITE="tbdisplay.test.$$"
 export TBDISPLAY_PREFS_SUITE="$PREFS_SUITE"
 defaults write "$PREFS_SUITE" tbdisplay.firstRunDone -bool true
+defaults write "$PREFS_SUITE" tbdisplay.updateCheckDisabled -bool true      # the tests never contact GitHub
 trap 'defaults delete "$PREFS_SUITE" >/dev/null 2>&1; rm -f "$HOME/Library/Preferences/$PREFS_SUITE.plist"' EXIT
 
 pass() { echo "ok   $1"; }
@@ -72,6 +73,7 @@ grep -q "look like" "$LOG/s1" && pass "HiDPI mode selected" || fail "no HiDPI mo
 [ "$(stat -f %Lp "$LOG/logs/server.log" 2>/dev/null)" = "600" ] && pass "the log file is owner-only (0600)" || fail "the log file permissions are loose"
 sleep 7
 grep -q "No data from the MacBook" "$LOG/c0" && fail "client lost the heartbeat" || pass "client kept receiving heartbeats for 7 s"
+grep -q "pointer shape received" "$LOG/logs/client.log" && pass "the iMac received the pointer shape as its own message" || fail "no pointer shape reached the client"
 pkill -TERM -f "$C"; sleep 2
 [ -f "$LOG/layout.json" ] && grep -q "Saved display position" "$LOG/s1" && pass "display position saved on disconnect" || fail "display position not saved"
 echo '{"dx":-700,"dy":-1500}' > "$LOG/layout.json"
@@ -125,7 +127,75 @@ $S --port $PORT 2> "$LOG/s2" &
 sleep 1
 client 2> "$LOG/c5" &
 wait_for "$LOG/s2" "Rejected" 10 && pass "loopback refused without --any-interface" || fail "interface limit not enforced"
+wait_for "$LOG/c5" "accepts Thunderbolt only" 6 && pass "the refused client is told which connection this Mac accepts" || fail "the refused client was not told why (got: $(tail -2 "$LOG/c5" | cut -c1-100))"
 pkill -TERM -f "$C"; stop_all
+
+# 5a. A connection that opens but never gets going is dropped and tried again, so the client never sits on "Connecting..." for good
+BH=47813
+( sleep 40 | nc -l $BH > /dev/null 2>&1 & )      # input that stays open, or nc quits as soon as it accepts and the client sees a close, not a silence
+sleep 1
+$C --port $BH --windowed --any-interface --host 127.0.0.1 2> "$LOG/c5a" &
+wait_for "$LOG/c5a" "No answer from the MacBook" 15 && pass "a connection that never gets going is dropped and tried again" || fail "the client waited for ever on a connection that never got going (got: $(tail -2 "$LOG/c5a" | cut -c1-100))"
+pkill -TERM -f "$C" 2>/dev/null; pkill -f "nc -l $BH" 2>/dev/null; pkill -f "sleep 40" 2>/dev/null; sleep 1
+
+# 5d. Check connection says why: answered, wrong kind of connection, paused from the menu
+$S --port $PORT --any-interface 2> "$LOG/s7" &
+sleep 2
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "The MacBook answered" && pass "the check says the MacBook answered" || fail "the check did not say the MacBook answered (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+stop_all
+$S --port $PORT 2> "$LOG/s8" &
+sleep 2
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "accepts Thunderbolt only" && pass "the check says which connection the MacBook accepts" || fail "the check did not name the accepted connection (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+stop_all
+$S --port $PORT --any-interface 2> "$LOG/s9" &
+client 2> "$LOG/c9" &
+wait_for "$LOG/s9" "Streaming" 25 && pass "a client streams before the pause check" || fail "no streaming before the pause check"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Disconnect" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/s9" "Disconnected from the menu" 10 && pass "Disconnect from the menu pauses the MacBook" || fail "the menu Disconnect did not pause the MacBook"
+out=$($C --port $PORT --check --any-interface 2>&1)
+echo "$out" | grep -q "has paused connections" && pass "the check says the MacBook is paused" || fail "the check did not say the MacBook is paused (got: $(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-140))"
+grep -q "Turned away" "$LOG/s9" && pass "the MacBook log says it turned the iMac away" || fail "no turned-away line in the MacBook log"
+stop_all
+
+# 5e. A connection check never replaces a live stream: only a client that sends a hello does that
+$S --port $PORT --any-interface 2> "$LOG/s10" &
+client 2> "$LOG/c10" &
+wait_for "$LOG/s10" "Streaming" 25 && pass "a client streams before the replacement check" || fail "no streaming before the replacement check"
+$C --port $PORT --check --any-interface > "$LOG/check10" 2>&1
+sleep 2
+grep -q "replacing the existing session" "$LOG/s10" && fail "a connection check replaced the live stream" || pass "a connection check does not replace the live stream"
+grep -q "Disconnected" "$LOG/c10" && fail "the live client was dropped by the check" || pass "the live client stayed connected through the check"
+grep -q "The MacBook answered" "$LOG/check10" && pass "the check still says the MacBook answered" || fail "the check no longer says the MacBook answered"
+stop_all
+
+# 5f. A client told Disconnect waits while the MacBook is paused, then reconnects by itself once it allows connections again
+export TBDISPLAY_ENDED_POLL_SECONDS=4
+$S --port $PORT --any-interface 2> "$LOG/s11" &
+client 2> "$LOG/c11" &
+wait_for "$LOG/s11" "Streaming" 25 && pass "a client streams before the auto reconnect check" || fail "no streaming before the auto reconnect check"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Disconnect" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/c11" "ended the connection" 10 && pass "the client is told the MacBook ended the connection" || fail "the client was not told the connection ended"
+sleep 9
+grep -q "allowing connections again" "$LOG/c11" && fail "the client reconnected while the MacBook was still paused" || pass "the client keeps waiting while the MacBook is paused"
+osascript -e 'tell application "System Events" to tell process "tbdisplay-server"
+    click menu bar item 1 of menu bar 1
+    delay 1
+    click menu item "Allow connections" of menu 1 of menu bar item 1 of menu bar 1
+end tell' > /dev/null 2>&1
+wait_for "$LOG/c11" "allowing connections again" 25 && pass "the client notices the MacBook allows connections again" || fail "the client never noticed the MacBook allows connections again"
+wait_count "$LOG/s11" "iMac screen" 2 20 && pass "the client streams again without being restarted" || fail "the client did not stream again"
+unset TBDISPLAY_ENDED_POLL_SECONDS
+stop_all
 
 # 5b. A client with a different version is told which Mac to update
 swiftc -O -swift-version 5 -target arm64-apple-macos14.0 Sources/Shared/Shared.swift Tests/probe/main.swift -o "$LOG/probe" 2>/dev/null

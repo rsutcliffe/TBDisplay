@@ -31,5 +31,9 @@ out=$(plan)
 echo "$out" | grep -q "ifconfig" && echo "$out" | grep -q "networksetup" && pass "the plan names the interface and service steps" || fail "the plan is missing a step"
 echo "$out" | grep -q "pmset" && fail "the plan mentions sleep without --include-sleep" || pass "the plan leaves out sleep without --include-sleep"
 
+# The iMac's login shell is zsh. A command sent through as_bash must split member lists the way bash does.
+got=$(zsh -c "$(as_bash 'm=$(printf "en2\nen3"); for i in $m bridge0; do echo "[$i]"; done')" | paste -sd' ' -)
+[ "$got" = "[en2] [en3] [bridge0]" ] && pass "a command sent to the iMac's zsh splits members like bash" || fail "zsh ran the iMac command as: $got"
+
 [ $fails -eq 0 ] && echo "tb-recover checks passed" || echo "$fails tb-recover check(s) failed"
 exit $fails

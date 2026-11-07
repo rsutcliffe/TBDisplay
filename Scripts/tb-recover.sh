@@ -78,9 +78,13 @@ wait_for_link() {   # seconds
 
 log_step() { mkdir -p "$(dirname "$LOG_FILE")"; echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG_FILE"; }
 
+# The iMac's login shell is zsh, which does not split "$m" into words, so ifconfig got "en2 en3" as one name.
+# Wrap the command so the iMac runs it under bash, the same as this Mac does.
+as_bash() { echo "bash -c $(printf %q "$1")"; }
+
 run_on_both() {   # command: the same command on this Mac, then on the iMac (with a terminal, so sudo can ask)
     bash -c "$1" || return 1
-    "${SSH[@]}" -t "$IMAC" "$1" || return 1
+    "${SSH[@]}" -t "$IMAC" "$(as_bash "$1")" || return 1
 }
 
 run_step() {   # name; returns 0 when the link is up afterwards
@@ -92,7 +96,7 @@ run_step() {   # name; returns 0 when the link is up afterwards
         sleep)
             read -r -p "The iMac will sleep for about 90 seconds and any remote session to it will drop. Type yes to go on: " ok
             [ "$ok" = "yes" ] || { echo "Skipped."; log_step "$name skipped by the person | $before"; return 1; }
-            "${SSH[@]}" -t "$IMAC" "$SLEEP_CMD" || true
+            "${SSH[@]}" -t "$IMAC" "$(as_bash "$SLEEP_CMD")" || true
             echo "Waiting for the iMac to wake and answer (up to 4 minutes)..."
             local waited=0
             while [ "$waited" -lt 240 ]; do

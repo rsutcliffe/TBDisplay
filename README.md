@@ -75,6 +75,8 @@ Press **Check connection...** in the iMac window. The iMac really tries to reach
 
 On the MacBook, the same button shows what the MacBook knows: whether it is paused, which connection it accepts, and whether an iMac has ever connected. Choosing **Disconnect** in the MacBook's menu pauses it until you choose **Allow connections**. While it is paused it tells any iMac that asks, so the iMac window says so. `tbdisplay-client --check` prints the iMac's report in Terminal.
 
+If the Thunderbolt link will not form, run `Scripts/tb-recover.sh` on the MacBook. It reads both Macs over SSH, tries a few software steps in order (cycle the bridge interfaces, switch the Thunderbolt Bridge service off and on, and with `--include-sleep` a sleep and wake of the iMac), and logs which one, if any, brought the link back in `~/Library/Logs/TBDisplay/recover.log`. None of this is documented by Apple. Cutting the iMac's power for 30 seconds is the only fix known to work so far.
+
 ## Updates
 
 TBDisplay checks GitHub for a newer release. Choose "Check for updates..." in the MacBook's menu bar item. The iMac client has no button for it: it checks quietly at launch, at most once a day, and shows "TBDisplay X is available" as a link to the release page when there is a newer one. The MacBook does the same through an "Update available" menu item. Untick "Check for updates automatically" to stop the daily check.

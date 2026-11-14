@@ -26,36 +26,25 @@ final class HEVCEncoder {
 
         // Plain real-time hardware encoding. The low-latency rate control mode was tried first and measured 41 ms per
         // frame at 4480x2520, against 11 ms for this one (Tests/encoder_latency.sh keeps it that way).
-        let specs: [(String, [CFString: Any])] = [
-            ("real-time hardware", [
-                kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true,
-            ]),
-        ]
-
-        var lastStatus: OSStatus = noErr
-        for (label, spec) in specs {
-            var created: VTCompressionSession?
-            lastStatus = VTCompressionSessionCreate(
-                allocator: kCFAllocatorDefault,
-                width: self.width,
-                height: self.height,
-                codecType: kCMVideoCodecType_HEVC,
-                encoderSpecification: spec as CFDictionary,
-                imageBufferAttributes: nil,
-                compressedDataAllocator: nil,
-                outputCallback: nil,
-                refcon: nil,
-                compressionSessionOut: &created)
-            if lastStatus == noErr, let created {
-                session = created
-                log("Encoder: HEVC \(width)x\(height), \(label) mode, \(bitrate / 1_000_000) Mbps")
-                break
-            }
+        let spec = [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true] as CFDictionary
+        var created: VTCompressionSession?
+        let status = VTCompressionSessionCreate(
+            allocator: kCFAllocatorDefault,
+            width: self.width,
+            height: self.height,
+            codecType: kCMVideoCodecType_HEVC,
+            encoderSpecification: spec,
+            imageBufferAttributes: nil,
+            compressedDataAllocator: nil,
+            outputCallback: nil,
+            refcon: nil,
+            compressionSessionOut: &created)
+        guard status == noErr, let session = created else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status),
+                          userInfo: [NSLocalizedDescriptionKey: "Could not create HEVC encoder (\(status))"])
         }
-        guard let session else {
-            throw NSError(domain: NSOSStatusErrorDomain, code: Int(lastStatus),
-                          userInfo: [NSLocalizedDescriptionKey: "Could not create HEVC encoder (\(lastStatus))"])
-        }
+        self.session = session
+        log("Encoder: HEVC \(width)x\(height), real-time hardware mode, \(bitrate / 1_000_000) Mbps")
 
         set(session, kVTCompressionPropertyKey_RealTime, true)
         set(session, kVTCompressionPropertyKey_AllowFrameReordering, false)

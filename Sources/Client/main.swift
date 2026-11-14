@@ -20,8 +20,8 @@ Usage: tbdisplay-client [options]
   --input             Send this Mac's keyboard and mouse to the MacBook (the MacBook must allow it in its menu bar item).
                       Esc and Q then go to the MacBook. Quit with Control-Option-Command-Q.
 
-Pairing: this Mac needs the same pairing key as the MacBook, in the same place. Copy pairing-key from the
-MacBook by AirDrop into ~/Library/Application Support/tbdisplay/ on this Mac.
+Pairing: press "Pair with MacBook..." in this window and "Pair a new Mac..." on the MacBook, and check both show
+the same code. (Copying pairing-key from the MacBook into ~/Library/Application Support/tbdisplay/ also works.)
   --check             Print the connection check (what the Check connection button shows) and exit
   --help              Show this help
 """
@@ -47,10 +47,6 @@ if let name = args.string("interface") { options.policy = .named(name) }
 if args.flag("any-interface") { options.policy = .any }
 options.windowed = args.flag("windowed")
 if let screen = args.int("screen") { options.screenIndex = screen }
-if CommandLine.arguments.contains("--pin") {
-    log("--pin was removed. Pairing uses a key file now. See --help.")
-    exit(1)
-}
 options.input = args.flag("input")
 
 // --check: the same check as the Check connection button, printed here, for support and for the tests
@@ -364,7 +360,7 @@ final class Client {
         guard !ended else { return }
         // The pairing key is read each time, so copying it in while the client waits is enough.
         guard let loaded = PairingKey.load() else {
-            log("No pairing key. Copy pairing-key from the MacBook to \(PairingKey.defaultURL.path)")
+            log("No pairing key at \(PairingKey.defaultURL.path). Press Pair with MacBook... to pair.")
             event(.keyMissing)
             queue.asyncAfter(deadline: .now() + 2) { [weak self] in if self?.connection == nil { self?.connect() } }
             return

@@ -2,19 +2,6 @@
 
 Items found by the audit of 19 October 2026 and not fixed yet.
 
-## TD-005: No automated build on each push
-
-- **Category:** Build and Deployment
-- **File:** (none, there is no `.github/workflows`)
-- **Line(s):** n/a
-- **Impact:** MEDIUM
-- **Effort:** MODERATE
-- **Risk:** LOW
-- **Added:** 2026-10-19
-- **Status:** OPEN
-
-Nothing builds the apps or runs the quiet tests when code is pushed. A workflow on a macOS runner could run `./build.sh` (it falls back to ad hoc signing when no certificate is found) and `Tests/all.sh`. Cap the job time, cancel superseded runs, and ignore documentation-only changes. The window and loopback groups need a screen and should stay local.
-
 ## TD-006: Large files with mixed responsibilities
 
 - **Category:** Architecture and Structure

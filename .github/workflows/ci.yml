@@ -1,0 +1,40 @@
+# Builds both apps and runs the quiet test groups on each pull request and each push to main.
+# Left out on purpose: the window groups (Tests/all.sh full) need a real screen and take over the keyboard and
+# mouse, and the encoder speed check times the hardware HEVC encoder, which a shared runner cannot measure fairly.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md', '.claude/**', 'LICENSE', '.gitignore']
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md', '.claude/**', 'LICENSE', '.gitignore']
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build both apps
+        run: ./build.sh      # no signing certificate on the runner, so it signs ad hoc
+      - name: Test wiring
+        run: Tests/test_lists.sh
+      - name: Unit checks
+        run: ./build.sh test
+      - name: Xcode package (XCTest)
+        run: swift test
+      - name: Release script
+        run: Tests/release_script_test.sh
+      - name: Link recovery script
+        run: Tests/tb_recover_test.sh

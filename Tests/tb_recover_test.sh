@@ -21,7 +21,10 @@ sp=$'Port:\n  Status: No device connected\n  Link Status: 0x100\n  Speed: Up to 
 [ "$(parse_links "$sp")" = "R1=0x2 R2=0x7 R4=0x100" ] && pass "link status is paired with its own receptacle" || fail "link status parsing gave: $(parse_links "$sp")"
 [ -z "$(parse_links "")" ] && pass "no Thunderbolt text gives an empty summary" || fail "empty text gave a summary"
 
-[[ "$(schedule_date)" =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] && pass "wake time uses pmset's MM/dd/yy HH:mm:ss format" || fail "wake time format is wrong: $(schedule_date)"
+# Runs the date command exactly as written inside SLEEP_CMD, so a change to it is caught here
+wake_cmd=$(sed -n 's/.*"\$(\(date [^)]*\))".*/\1/p' <<<"$SLEEP_CMD")
+wake_date=$(eval "$wake_cmd")
+[[ "$wake_date" =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] && pass "wake time uses pmset's MM/dd/yy HH:mm:ss format" || fail "wake time format is wrong: '$wake_date' from '$wake_cmd'"
 
 SLEEP=0; [ "$(steps)" = "interface service" ] && pass "the sleep step is left out by default" || fail "default steps were: $(steps)"
 SLEEP=1; [ "$(steps)" = "interface service sleep" ] && pass "--include-sleep adds the sleep step last" || fail "steps with sleep were: $(steps)"

@@ -175,7 +175,7 @@ final class StatusController: NSObject, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Create a new pairing key?"
-        alert.informativeText = "Every paired Mac is refused until you copy the new key to it. Use this if you think the key has been shared by mistake."
+        alert.informativeText = "Every paired Mac is refused until you pair it again with Pair a new Mac…. Use this if you think the key has been shared by mistake."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Create new key")
         alert.addButton(withTitle: "Cancel")
@@ -183,7 +183,7 @@ final class StatusController: NSObject, NSMenuDelegate {
         do {
             let key = try PairingKey.create()
             server.restart(key: key)
-            log("Created a new pairing key. Copy it to the iMac.")
+            log("Created a new pairing key. Pair the iMac again with Pair a new Mac….")
             revealKey()
         } catch {
             log("Could not create a new pairing key: \(error)")

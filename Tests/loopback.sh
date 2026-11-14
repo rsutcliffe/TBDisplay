@@ -54,9 +54,6 @@ for app in "TBDisplay Server" "TBDisplay Client"; do
         && pass "$app shows version $VERSION in Finder" || fail "$app shows the wrong version in Finder (code says $VERSION)"
 done
 
-# 0. Old options are refused with a clear message
-$S --port $PORT --pin 1234 2> "$LOG/s_old"; [ $? -ne 0 ] && grep -q "removed" "$LOG/s_old" && pass "--pin is refused with an explanation" || fail "--pin was accepted"
-
 # 1. A client started before the server waits for the key and the server, then connects
 client 2> "$LOG/c0" &
 sleep 3

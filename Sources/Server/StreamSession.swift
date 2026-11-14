@@ -58,6 +58,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private var statsTimer: DispatchSourceTimer?
     private var virtualDisplayID = kCGNullDirectDisplay
     private var buttonsDown = Set<UInt8>()
+    private var scrollRemainder = (x: Int32(0), y: Int32(0))   // hundredths of a pixel not yet posted, so slow scrolls add up
     private var statFrames = 0
     private var statBytes = 0
     private var statSkipped = 0
@@ -225,9 +226,7 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
             cg?.post(tap: .cghidEventTap)
         }
         func downType(_ b: UInt8) -> CGEventType { b == 0 ? .leftMouseDown : b == 1 ? .rightMouseDown : .otherMouseDown }
-        func upType(_ b: UInt8) -> CGEventType { b == 0 ? .leftMouseUp : b == 1 ? .rightMouseUp : .otherMouseUp }
         func dragType(_ b: UInt8) -> CGEventType { b == 0 ? .leftMouseDragged : b == 1 ? .rightMouseDragged : .otherMouseDragged }
-        func cgButton(_ b: UInt8) -> CGMouseButton { b == 0 ? .left : b == 1 ? .right : .center }
 
         switch event.kind {
         case .mouseMove:
@@ -236,17 +235,21 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
             let moveY = Double(event.dy) / 1_000_000 * bounds.height
             let target = clampToDisplays(CGPoint(x: here.x + moveX, y: here.y + moveY))
             let delta = (Int64(moveX.rounded()), Int64(moveY.rounded()))
-            if let held = buttonsDown.sorted().first { mouse(dragType(held), cgButton(held), at: target, delta: delta) }
+            if let held = buttonsDown.sorted().first { mouse(dragType(held), Self.cgButton(held), at: target, delta: delta) }
             else { mouse(.mouseMoved, .left, at: target, delta: delta) }
         case .mouseDown:
             buttonsDown.insert(event.button)
-            mouse(downType(event.button), cgButton(event.button), at: here)
+            mouse(downType(event.button), Self.cgButton(event.button), at: here)
         case .mouseUp:
             buttonsDown.remove(event.button)
-            mouse(upType(event.button), cgButton(event.button), at: here)
+            mouse(Self.upType(event.button), Self.cgButton(event.button), at: here)
         case .scroll:
+            scrollRemainder.x += event.scrollX; scrollRemainder.y += event.scrollY
+            let pixelsX = scrollRemainder.x / 100, pixelsY = scrollRemainder.y / 100
+            scrollRemainder.x -= pixelsX * 100; scrollRemainder.y -= pixelsY * 100
+            guard pixelsX != 0 || pixelsY != 0 else { return }
             let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
-                             wheel1: Int32(event.scrollY / 100), wheel2: Int32(event.scrollX / 100), wheel3: 0)
+                             wheel1: pixelsY, wheel2: pixelsX, wheel3: 0)
             cg?.flags = flags
             cg?.post(tap: .cghidEventTap)
         case .keyDown, .keyUp:
@@ -261,15 +264,17 @@ final class StreamSession: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private func releaseInput() {
         let here = CGEvent(source: nil)?.location ?? .zero
         for b in buttonsDown {
-            let type: CGEventType = b == 0 ? .leftMouseUp : b == 1 ? .rightMouseUp : .otherMouseUp
-            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: here,
-                    mouseButton: b == 0 ? .left : b == 1 ? .right : .center)?.post(tap: .cghidEventTap)
+            CGEvent(mouseEventSource: nil, mouseType: Self.upType(b), mouseCursorPosition: here,
+                    mouseButton: Self.cgButton(b))?.post(tap: .cghidEventTap)
         }
         for code in keysDown {
             CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: false)?.post(tap: .cghidEventTap)
         }
         buttonsDown.removeAll(); keysDown.removeAll()
     }
+
+    private static func upType(_ b: UInt8) -> CGEventType { b == 0 ? .leftMouseUp : b == 1 ? .rightMouseUp : .otherMouseUp }
+    private static func cgButton(_ b: UInt8) -> CGMouseButton { b == 0 ? .left : b == 1 ? .right : .center }
 
     /// Keeps the pointer on a real display. A point outside every display moves to the nearest edge.
     private func clampToDisplays(_ point: CGPoint) -> CGPoint {

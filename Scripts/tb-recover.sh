@@ -35,9 +35,6 @@ bridge_is_active() { grep -q "status: active" <<<"$1"; }
 # Link Status before its Receptacle, so the status is held until the receptacle line arrives.
 parse_links() { awk '/Link Status/{ls=$3} /Receptacle/{print "R" $2 "=" ls}' <<<"$1" | sort | paste -sd' ' -; }
 
-# When the iMac should wake after it is put to sleep, in the format pmset wants.
-schedule_date() { date -v+90S "+%m/%d/%y %H:%M:%S"; }
-
 steps() { if [ "$SLEEP" = 1 ]; then echo "interface service sleep"; else echo "interface service"; fi; }
 
 step_command() { case "$1" in interface) echo "$IFACE_CMD";; service) echo "$SERVICE_CMD";; sleep) echo "$SLEEP_CMD";; esac; }

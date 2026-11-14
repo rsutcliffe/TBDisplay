@@ -22,16 +22,12 @@ Usage: tbdisplay-server [options]
   --record-seconds N  How long to record (default 30)
   --help              Show this help
 
-Pairing: the first run creates a random pairing key (see the log for its place). Copy that file to the same
-place on the iMac, by AirDrop. Keyboard and mouse from the iMac are switched on from the menu bar item.
+Pairing: choose "Pair a new Mac..." in the menu bar item, then "Pair with MacBook..." on the iMac, and check both
+show the same code. (Copying the pairing-key file to the same place on the iMac also works.) Keyboard and mouse
+from the iMac are switched on from the menu bar item.
 """
 
 LogFile.shared = LogFile(url: LogFile.defaultURL(name: "server"))
-
-if CommandLine.arguments.contains("--pin") || CommandLine.arguments.contains("--input") {
-    log("--pin and --input were removed. Pairing uses a key file now, and keyboard and mouse are switched on from the menu bar item.")
-    exit(1)
-}
 
 let args = Arguments(flagNames: ["any-interface", "no-hidpi", "no-adapt", "help"])
 if args.flag("help") { print(usage); exit(0) }
@@ -140,10 +136,21 @@ final class Server {
     }
 
     /// Starts listening again with a new key. Everyone paired with the old key is refused.
+    /// The old listener gives up its port a moment after cancel, so the new one starts only once it has.
     func restart(key: Data) {
+        let old = listener
+        listener = nil
         shutdown()
         self.key = key
-        try? start()
+        guard let old else { startNewListener(); return }
+        old.stateUpdateHandler = { [weak self] state in
+            if case .cancelled = state { DispatchQueue.main.async { self?.startNewListener() } }
+        }
+        old.cancel()
+    }
+
+    private func startNewListener() {
+        do { try start() } catch { log("Could not start listener with the new key: \(error)") }
     }
 
     /// Drops the iMac and refuses it until `resume`, because the client would reconnect within a second.
@@ -206,7 +213,7 @@ do {
     exit(1)
 }
 log(keyAlreadyExisted ? "Pairing key: \(PairingKey.defaultURL.path)"
-                      : "Created a new pairing key at \(PairingKey.defaultURL.path). Copy that file to the iMac by AirDrop, into the same folder.")
+                      : "Created a new pairing key at \(PairingKey.defaultURL.path). Pair the iMac with Pair a new Mac… in the menu bar item.")
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
